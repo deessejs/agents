@@ -1,5 +1,5 @@
 import { eveChannel } from "eve/channels/eve";
-import { localDev, placeholderAuth, vercelOidc } from "eve/channels/auth";
+import { localDev, none, vercelOidc } from "eve/channels/auth";
 
 /**
  * Standard eve HTTP channel shared by every ds-team agent.
@@ -7,13 +7,14 @@ import { localDev, placeholderAuth, vercelOidc } from "eve/channels/auth";
  * - vercelOidc() lets the eve TUI and Vercel deployments reach the deployed agent.
  * - localDev() opens localhost for `eve dev` and the REPL.
  *   Ignored in production.
- * - placeholderAuth() is a public-demo auth shim.
- *   Replace with your app's auth provider (Auth.js, Clerk, ...) or `none()`
- *   if you want a fully public agent.
+ * - none() is the explicit allowlist for anonymous traffic. Use it ONLY
+ *   for personal/dev agents that don't process non-public data.
+ *   For anything customer-facing, swap it for an app-specific AuthFn
+ *   (httpBasic, jwtHmac, jwtEcdsa, oidc, or a custom one).
  */
 export function makeEveChannel() {
   return eveChannel({
-    auth: [vercelOidc(), localDev(), placeholderAuth()],
+    auth: [localDev(), vercelOidc(), none()],
   });
 }
 
