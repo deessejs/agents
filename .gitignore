@@ -1,0 +1,33 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+.next
+.nitro
+.output
+dist
+.vercel
+.eve
+.workflow-data
+
+# Env files — never commit secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+*.tsbuildinfo
+.vscode/
+.idea/
+
+# Turbo
+.turbo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

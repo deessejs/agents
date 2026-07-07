@@ -1,0 +1,25 @@
+{
+  "name": "@ds-team/agent-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./channel/eve": "./src/channels/eve.ts",
+    "./connection/exa": "./src/connections/exa.ts",
+    "./connection/github": "./src/connections/github.ts",
+    "./instructions/heads": "./src/instructions/heads.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vercel/connect": "0.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.x",
+    "typescript": "7.0.1-rc"
+  },
+  "peerDependencies": {
+    "eve": "^0.20.0"
+  }
+}
