@@ -17,6 +17,7 @@
     "@ds-team/agent-core": "workspace:*",
     "ai": "^7.0.0",
     "eve": "^0.20.0",
+    "vercel-minimax-ai-provider": "^0.0.2",
     "zod": "4.4.3"
   },
   "devDependencies": {
