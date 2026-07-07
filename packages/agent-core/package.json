@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./channel/eve": "./src/channels/eve.ts",
+    "./channel/telegram": "./src/channels/telegram.ts",
     "./connection/exa": "./src/connections/exa.ts",
     "./connection/github": "./src/connections/github.ts",
     "./instructions/heads": "./src/instructions/heads.ts"

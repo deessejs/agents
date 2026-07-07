@@ -4,7 +4,10 @@
   "globalEnv": [
     "GITHUB_TOKEN",
     "EXA_API_KEY",
-    "MINIMAX_API_KEY"
+    "MINIMAX_API_KEY",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_WEBHOOK_SECRET_TOKEN",
+    "TELEGRAM_BOT_USERNAME"
   ],
   "tasks": {
     "build": {
