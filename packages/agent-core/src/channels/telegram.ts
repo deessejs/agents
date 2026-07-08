@@ -168,7 +168,14 @@ export function makeTelegramChannel(): TelegramChannel {
           try {
             parsed = JSON.parse(bodyText);
           } catch {
-            return orig(req, opts);
+            // Non-JSON body: pass to eve's original handler.
+            // Clone the request first — the body stream is consumed after .text().
+            const clonedReq = new Request(req.url, {
+              method: req.method,
+              headers: req.headers,
+              body: bodyText,
+            });
+            return orig(clonedReq, opts);
           }
 
           const msg = parsed.message as TelegramParsedMessage | undefined;
@@ -291,11 +298,19 @@ export function makeTelegramChannel(): TelegramChannel {
               return new Response("ok");
             } catch (err) {
               console.error("[voice] dispatch failed:", err instanceof Error ? err.message : String(err));
-              // Fall through to the original handler (will see empty message)
+              // Fall through to the original handler (will see empty message).
+              // Clone the request — body stream is already consumed by transcribeVoice.
             }
           }
 
-          return orig(req, opts);
+          // Non-voice message: pass to eve's original handler.
+          // Clone the request first — the body stream was consumed by .text() above.
+          const clonedReq = new Request(req.url, {
+            method: req.method,
+            headers: req.headers,
+            body: bodyText,
+          });
+          return orig(clonedReq, opts);
         },
       };
     }

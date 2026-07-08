@@ -9,6 +9,8 @@ severity: medium
 
 The voice transcription implementation in `agent-core` works end-to-end (transcribed audio reaches the agent model), but several correctness issues were found during review.
 
+**All findings fixed in commit `ce64299` (2026-07-08).** An additional latent bug (request body consumed) was caught from Vercel logs and fixed in the follow-up commit.
+
 ---
 
 ## Finding 1 — Security: whitelist bypass for voice messages
