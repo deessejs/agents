@@ -23,7 +23,7 @@ export const memories = pgTable(
     scope: text("scope").notNull() as ReturnType<typeof text> & { _brand: Scope },
     tier: text("tier").notNull() as ReturnType<typeof text> & { _brand: Tier },
     content: text("content").notNull(),
-    embedding: vector("embedding", { dimensions: 1536 }),
+    embedding: vector("embedding", { dimensions: 768 }),
     importance: real("importance").notNull().default(0.5),
     metadata: jsonb("metadata").notNull().default({} as Record<string, unknown>),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

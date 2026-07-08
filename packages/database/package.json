@@ -19,7 +19,6 @@
     "check": "drizzle-kit check"
   },
   "dependencies": {
-    "@ai-sdk/gateway": "^4.0.0",
     "@neondatabase/serverless": "^0.10.0",
     "ai": "^7.0.0",
     "drizzle-orm": "^0.45.0",
@@ -29,6 +28,7 @@
     "@types/node": "24.x",
     "dotenv": "^16.0.0",
     "drizzle-kit": "^0.31.0",
+    "pg": "^8.22.0",
     "tsx": "^4.0.0",
     "typescript": "7.0.1-rc"
   },

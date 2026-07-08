@@ -142,9 +142,6 @@ importers:
 
   packages/database:
     dependencies:
-      '@ai-sdk/gateway':
-        specifier: ^4.0.0
-        version: 4.0.12(zod@4.4.3)
       '@neondatabase/serverless':
         specifier: ^0.10.0
         version: 0.10.4
@@ -170,6 +167,9 @@ importers:
       drizzle-kit:
         specifier: ^0.31.0
         version: 0.31.10
+      pg:
+        specifier: ^8.22.0
+        version: 8.22.0
       tsx:
         specifier: ^4.0.0
         version: 4.23.0
@@ -2364,8 +2364,7 @@ snapshots:
   pg-cloudflare@1.4.0:
     optional: true
 
-  pg-connection-string@2.14.0:
-    optional: true
+  pg-connection-string@2.14.0: {}
 
   pg-int8@1.0.1: {}
 
@@ -2374,7 +2373,6 @@ snapshots:
   pg-pool@3.14.0(pg@8.22.0):
     dependencies:
       pg: 8.22.0
-    optional: true
 
   pg-protocol@1.15.0: {}
 
@@ -2385,7 +2383,6 @@ snapshots:
       postgres-bytea: 1.0.1
       postgres-date: 1.0.7
       postgres-interval: 1.2.0
-    optional: true
 
   pg-types@4.1.0:
     dependencies:
@@ -2406,34 +2403,28 @@ snapshots:
       pgpass: 1.0.5
     optionalDependencies:
       pg-cloudflare: 1.4.0
-    optional: true
 
   pgpass@1.0.5:
     dependencies:
       split2: 4.2.0
-    optional: true
 
-  postgres-array@2.0.0:
-    optional: true
+  postgres-array@2.0.0: {}
 
   postgres-array@3.0.4: {}
 
-  postgres-bytea@1.0.1:
-    optional: true
+  postgres-bytea@1.0.1: {}
 
   postgres-bytea@3.0.0:
     dependencies:
       obuf: 1.1.2
 
-  postgres-date@1.0.7:
-    optional: true
+  postgres-date@1.0.7: {}
 
   postgres-date@2.1.0: {}
 
   postgres-interval@1.2.0:
     dependencies:
       xtend: 4.0.2
-    optional: true
 
   postgres-interval@3.0.0: {}
 
@@ -2479,8 +2470,7 @@ snapshots:
 
   source-map@0.6.1: {}
 
-  split2@4.2.0:
-    optional: true
+  split2@4.2.0: {}
 
   srvx@0.11.21: {}
 
@@ -2558,8 +2548,7 @@ snapshots:
     dependencies:
       os-paths: 4.4.0
 
-  xtend@4.0.2:
-    optional: true
+  xtend@4.0.2: {}
 
   zod@4.1.11: {}
 
