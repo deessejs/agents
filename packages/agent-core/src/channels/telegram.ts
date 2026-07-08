@@ -12,11 +12,15 @@
 import {
   telegramChannel,
   defaultTelegramAuth,
+  formatTelegramContextBlock,
+  buildTelegramTurnMessage,
+  telegramContinuationToken,
+  telegramReplyInputResponse,
   type TelegramMessage,
   type TelegramContext,
   type TelegramInboundResult,
+  type TelegramChannel,
 } from "eve/channels/telegram";
-import type { TelegramChannel } from "eve/channels/telegram";
 
 export { defaultTelegramAuth };
 export type { TelegramMessage, TelegramContext };
@@ -31,6 +35,7 @@ interface TelegramVoice {
   file_size?: number;
 }
 
+/** Raw parsed message from Telegram webhook payload */
 interface TelegramParsedMessage {
   message_id: number | string;
   from?: { id: number | string; is_bot?: boolean; username?: string };
@@ -42,6 +47,19 @@ interface TelegramParsedMessage {
   document?: unknown;
   reply_to_message?: unknown;
   message_thread_id?: number;
+}
+
+/** Telegram channel state — mirrors eve's TelegramChannelState */
+interface TelegramChannelState {
+  botUsername: string | null;
+  chatId: string | null;
+  chatType: string | null;
+  conversationId: string | null;
+  hitlCallbacks: Record<string, unknown>;
+  messageThreadId: number | null;
+  nextHitlCallbackId: number;
+  pendingFreeformReplies: Record<string, unknown>;
+  triggeringUserId: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,44 +120,6 @@ async function transcribeVoice(voice: TelegramVoice, botToken: string): Promise<
 }
 
 // ---------------------------------------------------------------------------
-// Build the turn message (same logic as eve's buildTelegramTurnMessage)
-// ---------------------------------------------------------------------------
-function buildTurnMessage(text: string, attachments: unknown[]): string | unknown[] {
-  if (attachments.length === 0) return text;
-  if (text.trim().length === 0) return attachments;
-  return [{ type: "text", text }, ...attachments];
-}
-
-// ---------------------------------------------------------------------------
-// Build the auth context (same logic as eve's defaultTelegramAuth)
-// ---------------------------------------------------------------------------
-function buildTelegramAuth(msg: TelegramParsedMessage): { authenticator: string; principalId: string; principalType: string; issuer: string; attributes: Record<string, unknown> } {
-  const from = msg.from;
-  if (!from) return { authenticator: "telegram-webhook", principalId: "unknown", principalType: "user", issuer: "telegram", attributes: {} };
-  const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
-  const principalId = isGroup
-    ? `telegram:${msg.chat.id}:${from.id}`
-    : `telegram:${from.id}`;
-  const issuer = isGroup ? `telegram:${msg.chat.id}` : "telegram";
-  const attributes: Record<string, unknown> = {
-    chat_id: String(msg.chat.id),
-    chat_type: msg.chat.type,
-    message_id: String(msg.message_id),
-    user_id: String(from.id),
-  };
-  if (msg.chat.title) attributes.chat_title = msg.chat.title;
-  if (msg.message_thread_id !== undefined) attributes.message_thread_id = String(msg.message_thread_id);
-  if (from.username) attributes.username = from.username;
-  return {
-    authenticator: "telegram-webhook",
-    principalId,
-    principalType: from.is_bot ? "service" : "user",
-    issuer,
-    attributes,
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Channel factory
 // ---------------------------------------------------------------------------
 export function makeTelegramChannel(): TelegramChannel {
@@ -195,44 +175,119 @@ export function makeTelegramChannel(): TelegramChannel {
           const voice = msg?.voice as TelegramVoice | undefined;
 
           if (voice && botToken && msg) {
+            // ── Finding 1: Whitelist check (must duplicate — onMessage is not called) ──
+            const allowedUserId = process.env.TELEGRAM_ALLOWED_USER_ID;
+            if (allowedUserId && String(msg.from?.id) !== allowedUserId) {
+              // Echo access-denied inline (we have botToken here, unlike in onMessage)
+              fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: String(msg.chat.id),
+                  text: "Access denied.",
+                  message_thread_id: msg.message_thread_id,
+                }),
+              }).catch(() => {/* swallow — best effort */});
+              return new Response("ok");
+            }
+
             try {
               const transcript = await transcribeVoice(voice, botToken);
               const send = (opts as { send: (input: unknown, options?: unknown) => Promise<unknown> }).send;
-              const waitUntil = (opts as { waitUntil?: (fn: () => void | Promise<void>) => void }).waitUntil;
 
-              // Build and dispatch the turn with the transcript as the message text
-              const auth = buildTelegramAuth(msg);
-              const turnMessage = buildTurnMessage(transcript, []);
-              const continuationToken = `${String(msg.chat.id)}::`;
+              // ── Finding 4: Build proper TelegramChannelState ──
+              const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
+              const conversationId = isGroup
+                ? (msg.reply_to_message as { from?: { is_bot?: boolean }; message_id?: number | string } | undefined)
+                    ?.from?.is_bot === true
+                  ? String((msg.reply_to_message as { message_id?: number | string }).message_id)
+                  : String(msg.message_id)
+                : null;
+              const messageThreadId = msg.message_thread_id ?? null;
 
-              // Dispatch the turn to the agent
-              await send(
-                { message: turnMessage, context: [] },
-                { auth, continuationToken, state: {} },
+              const state: TelegramChannelState = {
+                botUsername,
+                chatId: String(msg.chat.id),
+                chatType: msg.chat.type,
+                conversationId,
+                hitlCallbacks: {},
+                messageThreadId,
+                nextHitlCallbackId: 0,
+                pendingFreeformReplies: {},
+                triggeringUserId: msg.from?.id !== undefined ? String(msg.from.id) : null,
+              };
+
+              // ── Finding 3: Proper continuationToken (all chat types) ──
+              const continuationToken = telegramContinuationToken({
+                chatId: String(msg.chat.id),
+                messageThreadId: messageThreadId ?? undefined,
+                conversationId: conversationId ?? undefined,
+              });
+
+              // ── Finding 2: Telegram context block for the model ──
+              const contextBlock = formatTelegramContextBlock({
+                botUsername,
+                chatId: String(msg.chat.id),
+                chatTitle: msg.chat.title,
+                chatType: msg.chat.type as "private" | "group" | "supergroup" | "channel",
+                messageId: String(msg.message_id),
+                messageThreadId: messageThreadId ?? undefined,
+                userId: msg.from?.id !== undefined ? String(msg.from.id) : undefined,
+                username: msg.from?.username,
+              });
+
+              // ── Build turn message (use eve's utility, not duplicated logic) ──
+              const turnMessage = buildTelegramTurnMessage(
+                { text: transcript, caption: "", attachments: [], replyToMessage: undefined } as Parameters<typeof buildTelegramTurnMessage>[0],
+                [],
               );
 
-              // Echo the transcript in the Telegram chat after responding to the webhook
-              if (waitUntil) {
-                waitUntil(
-                  (async () => {
-                    try {
-                      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                        method: "POST",
-                        headers: { "content-type": "application/json" },
-                        body: JSON.stringify({
-                          chat_id: String(msg!.chat.id),
-                          text: `📝 ${transcript}`,
-                          message_thread_id: msg!.message_thread_id,
-                        }),
-                      });
-                    } catch {
-                      // swallow
-                    }
-                  }) as () => void,
-                );
-              }
+              // ── Finding 5: replyToMessage for group anchoring / HITL ──
+              const replyText = msg.reply_to_message
+                ? (msg.caption || String(msg.message_id))
+                : undefined;
+              const inputResponses =
+                replyText !== undefined &&
+                replyText.trim().length > 0 &&
+                (msg.reply_to_message as { from?: { is_bot?: boolean } } | undefined)?.from?.is_bot === true
+                  ? [telegramReplyInputResponse({ messageId: String(msg.message_id), text: replyText })]
+                  : undefined;
 
-              // Short-circuit: we've dispatched the turn ourselves
+              // ── Auth: use eve's defaultTelegramAuth with a compatible shape ──
+              // eve's defaultTelegramAuth accepts a TelegramMessage-like object.
+              // We pass the shape it expects (messageId as string, etc.).
+              const auth = defaultTelegramAuth({
+                attachments: [],
+                caption: "",
+                chat: {
+                  id: msg.chat.id,
+                  title: msg.chat.title,
+                  type: msg.chat.type as "private" | "group" | "supergroup" | "channel",
+                  username: msg.chat.username,
+                },
+                from: msg.from
+                  ? {
+                      firstName: undefined,
+                      id: String(msg.from.id),
+                      isBot: msg.from.is_bot ?? false,
+                      languageCode: undefined,
+                      lastName: undefined,
+                      username: msg.from.username,
+                    }
+                  : undefined,
+                messageId: String(msg.message_id),
+                messageThreadId: messageThreadId ?? undefined,
+                raw: {},
+                replyToMessage: undefined,
+                text: transcript,
+              } as Parameters<typeof defaultTelegramAuth>[0]);
+
+              // ── Dispatch the turn to the agent ──
+              await send(
+                { inputResponses, message: turnMessage, context: [contextBlock] },
+                { auth, continuationToken, state },
+              );
+
               return new Response("ok");
             } catch (err) {
               console.error("[voice] dispatch failed:", err instanceof Error ? err.message : String(err));

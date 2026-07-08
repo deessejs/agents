@@ -1,4 +1,4 @@
----
+ ---
 title: "Telegram voice transcription — code audit"
 date: 2026-07-08
 audited_file: packages/agent-core/src/channels/telegram.ts
