@@ -53,23 +53,29 @@ async function defaultOnMessageImpl(
 // Remove this and the debug wrapper below once you're done debugging.
 // ---------------------------------------------------------------------------
 
-/**
- * Debug onMessage that logs all Telegram message data and the resulting
- * auth context before delegating to the real handler.
- *
- * Logs to stdout — look for it in the eve dev terminal.
- */
+// ---------------------------------------------------------------------------
+// TODO: replace debugOnMessage with defaultOnMessageImpl when done debugging
+// ---------------------------------------------------------------------------
+
 async function debugOnMessage(
-  ctx: Parameters<typeof defaultOnMessageImpl>[0],
+  ctx: { telegram: { startTyping(): Promise<void>; botUsername?: string; sendMessage(text: string): Promise<unknown> } },
   msg: Parameters<typeof shouldDispatchTelegramMessage>[0] & { raw?: unknown },
 ) {
-  console.log("=== Telegram inbound ===");
+  // Silently continue to the real handler first so the agent responds
+  const result = await defaultOnMessageImpl(ctx, msg);
+  if (!result) return null;
 
-  console.log("--- Raw Telegram body (from webhook) ---");
-  console.log(JSON.stringify(msg.raw ?? {}, null, 2));
-
-  console.log("\n--- Parsed message object ---");
-  console.log(
+  // Then reply with the raw + parsed data so YOU can see what arrived
+  const debug = [
+    "🔍 *Debug — what I received*",
+    "",
+    "--- raw from Telegram ---",
+    "```json",
+    JSON.stringify(msg.raw ?? {}, null, 2),
+    "```",
+    "",
+    "--- parsed message ---",
+    "```json",
     JSON.stringify(
       {
         from: msg.from,
@@ -84,13 +90,16 @@ async function debugOnMessage(
       null,
       2,
     ),
-  );
+    "```",
+    "",
+    "--- auth context ---",
+    "```json",
+    JSON.stringify(result, null, 2),
+    "```",
+  ].join("\n");
 
-  const result = await defaultOnMessageImpl(ctx, msg);
-
-  console.log("\n--- Auth context being returned ---");
-  console.log(JSON.stringify(result, null, 2));
-  console.log("=== end Telegram inbound ===\n");
+  // Fire and forget — don't block the agent response
+  ctx.telegram.sendMessage(debug).catch(() => {});
 
   return result;
 }
