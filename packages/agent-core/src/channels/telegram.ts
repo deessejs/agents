@@ -1,23 +1,18 @@
-import { telegramChannel, defaultTelegramAuth } from "eve/channels/telegram";
+import {
+  telegramChannel,
+  defaultTelegramAuth,
+  type TelegramMessage,
+  type TelegramContext,
+  type TelegramInboundResult,
+  type TelegramInboundResultOrPromise,
+} from "eve/channels/telegram";
 
 /**
  * Inline re-implementation of shouldDispatchTelegramMessage from eve defaults.
- * Dispatch a message if it has text/content and either:
- *   - it's a DM (private chat)
- *   - it replies to the bot
- *   - it's a bot command directed at this bot
- *   - it mentions the bot
  */
-function shouldDispatchTelegramMessage(msg: {
-  from?: { isBot?: boolean };
-  chat: { type: string };
-  text?: string;
-  caption?: string;
-  attachments: unknown[];
-  replyToMessage?: { from?: { isBot?: boolean } };
-}, botUsername?: string): boolean {
+function shouldDispatchTelegramMessage(msg: TelegramMessage, botUsername?: string): boolean {
   if (msg.from?.isBot === true || msg.chat.type === "channel") return false;
-  const text = msg.text ?? msg.caption;
+  const text = msg.text || msg.caption;
   const hasContent = (text?.trim().length ?? 0) > 0 || msg.attachments.length > 0;
   if (!hasContent) return false;
   if (msg.chat.type === "private") return true;
@@ -40,9 +35,9 @@ function shouldDispatchTelegramMessage(msg: {
  * Inline re-implementation of defaultOnMessage from eve defaults.
  */
 async function defaultOnMessageImpl(
-  ctx: { telegram: { startTyping(): Promise<void>; botUsername?: string } },
-  msg: Parameters<typeof shouldDispatchTelegramMessage>[0],
-) {
+  ctx: TelegramContext,
+  msg: TelegramMessage,
+): Promise<TelegramInboundResult> {
   if (!shouldDispatchTelegramMessage(msg, ctx.telegram.botUsername)) return null;
   await ctx.telegram.startTyping();
   return { auth: defaultTelegramAuth(msg) };
@@ -50,20 +45,19 @@ async function defaultOnMessageImpl(
 
 /**
  * Production onMessage: whitelist check + real handler.
- *
- * Enforces TELEGRAM_ALLOWED_USER_ID (from this app's .env) before
- * dispatching to the agent. Unauthorized callers get a plain reply.
  */
-async function onMessage(
-  ctx: { telegram: { startTyping(): Promise<void>; botUsername?: string; sendMessage(text: string): Promise<unknown> } },
-  msg: Parameters<typeof shouldDispatchTelegramMessage>[0],
-) {
-  const allowedUserId = process.env.TELEGRAM_ALLOWED_USER_ID;
-  if (allowedUserId && msg.from?.id !== allowedUserId) {
-    await ctx.telegram.sendMessage("Access denied.");
-    return null;
-  }
-  return defaultOnMessageImpl(ctx, msg);
+function makeOnMessage(): (
+  ctx: TelegramContext,
+  msg: TelegramMessage,
+) => TelegramInboundResultOrPromise {
+  return async (ctx, msg) => {
+    const allowedUserId = process.env.TELEGRAM_ALLOWED_USER_ID;
+    if (allowedUserId && msg.from?.id !== allowedUserId) {
+      await ctx.telegram.sendMessage("Access denied.");
+      return null;
+    }
+    return defaultOnMessageImpl(ctx, msg);
+  };
 }
 
 /**
@@ -75,8 +69,8 @@ async function onMessage(
  *   TELEGRAM_BOT_USERNAME        — the @handle BotFather assigned (no `@` prefix)
  *   TELEGRAM_ALLOWED_USER_ID      — Telegram user ID that is allowed to use this bot
  *
- * If any of these is missing at agent startup, the channel factory will
- * throw — declare them in .env before running eve dev or deploying.
+ * If any of the required credentials are missing at agent startup, the channel
+ * factory will throw — declare them in .env before running eve dev or deploying.
  *
  * Attachments are constrained to images and PDFs up to 10 MB to keep
  * payload sizes predictable for the model context.
@@ -110,7 +104,7 @@ export function makeTelegramChannel() {
       allowedMediaTypes: ["image/*", "application/pdf"],
       maxBytes: 10 * 1024 * 1024,
     },
-    onMessage,
+    onMessage: makeOnMessage(),
   });
 }
 
