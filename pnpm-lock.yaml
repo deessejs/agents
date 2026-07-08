@@ -15,9 +15,6 @@ importers:
         specifier: ^7.0.0
         version: 7.0.16(zod@4.4.3)
     devDependencies:
-      pg:
-        specifier: ^8.22.0
-        version: 8.22.0
       turbo:
         specifier: ^2.5.0
         version: 2.10.4
@@ -58,6 +55,9 @@ importers:
       '@ds-team/agent-core':
         specifier: workspace:*
         version: link:../../packages/agent-core
+      '@ds-team/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       ai:
         specifier: ^7.0.16
         version: 7.0.16(zod@4.4.3)
@@ -89,6 +89,9 @@ importers:
       '@ds-team/agent-core':
         specifier: workspace:*
         version: link:../../packages/agent-core
+      '@ds-team/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       ai:
         specifier: ^7.0.16
         version: 7.0.16(zod@4.4.3)

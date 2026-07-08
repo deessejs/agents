@@ -12,7 +12,6 @@
     "noEmit": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "forceConsistentCasingInFileNames": true,
-    "verbatimModuleSyntax": true
+    "forceConsistentCasingInFileNames": true
   }
 }
