@@ -11,5 +11,9 @@
   },
   "devDependencies": {
     "turbo": "^2.5.0"
+  },
+  "dependencies": {
+    "@ai-sdk/groq": "^4.0.5",
+    "ai": "^7.0.0"
   }
 }
