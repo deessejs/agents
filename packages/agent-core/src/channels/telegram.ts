@@ -131,6 +131,7 @@ function makeOnMessage(botToken: string): (
       try {
         await ctx.telegram.sendMessage("🎤 Transcribing...");
         const transcript = await transcribeVoice(voice, botToken);
+        await ctx.telegram.sendMessage(`📝 ${transcript}`);
         return defaultOnMessageImpl(ctx, { ...msg, text: transcript } as TelegramMessage);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
