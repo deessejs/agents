@@ -61,45 +61,48 @@ async function debugOnMessage(
   ctx: { telegram: { startTyping(): Promise<void>; botUsername?: string; sendMessage(text: string): Promise<unknown> } },
   msg: Parameters<typeof shouldDispatchTelegramMessage>[0] & { raw?: unknown },
 ) {
-  // Silently continue to the real handler first so the agent responds
+  // Run the real handler first so the agent starts responding
   const result = await defaultOnMessageImpl(ctx, msg);
   if (!result) return null;
 
-  // Then reply with the raw + parsed data so YOU can see what arrived
-  const debug = [
-    "🔍 *Debug — what I received*",
-    "",
-    "--- raw from Telegram ---",
-    "```json",
-    JSON.stringify(msg.raw ?? {}, null, 2),
-    "```",
-    "",
-    "--- parsed message ---",
-    "```json",
-    JSON.stringify(
-      {
-        from: msg.from,
-        chat: msg.chat,
-        messageId: (msg as Record<string, unknown>).messageId,
-        text: msg.text,
-        caption: msg.caption,
-        messageThreadId: (msg as Record<string, unknown>).messageThreadId,
-        replyToMessage: (msg as Record<string, unknown>).replyToMessage,
-        attachments: msg.attachments,
-      },
-      null,
-      2,
-    ),
-    "```",
-    "",
-    "--- auth context ---",
-    "```json",
-    JSON.stringify(result, null, 2),
-    "```",
-  ].join("\n");
+  // Build debug payloads
+  const raw = JSON.stringify(msg.raw ?? {}, null, 2);
+  const parsed = JSON.stringify(
+    {
+      from: msg.from,
+      chat: msg.chat,
+      messageId: (msg as Record<string, unknown>).messageId,
+      text: msg.text,
+      caption: msg.caption,
+      messageThreadId: (msg as Record<string, unknown>).messageThreadId,
+      replyToMessage: (msg as Record<string, unknown>).replyToMessage,
+      attachments: msg.attachments,
+    },
+    null,
+    2,
+  );
+  const authStr = JSON.stringify(result, null, 2);
 
-  // Fire and forget — don't block the agent response
-  ctx.telegram.sendMessage(debug).catch(() => {});
+  // Summary first — plain text, sends right now, caught errors bubble up
+  await ctx.telegram.sendMessage(
+    `[DEBUG] from=${msg.from?.username ?? msg.from?.id ?? "?"} | ` +
+    `chat=${msg.chat.id} (${msg.chat.type}) | ` +
+    `text="${(msg.text ?? msg.caption ?? "").substring(0, 80)}"`,
+  );
+
+  // Raw, parsed, auth — split into 4000-char chunks to stay under Telegram's limit
+  for (const [label, data] of [
+    ["[RAW]", raw],
+    ["[PARSED]", parsed],
+    ["[AUTH]", authStr],
+  ] as const) {
+    for (let i = 0; i < data.length; i += 4000) {
+      const chunk = data.substring(i, i + 4000);
+      await ctx.telegram.sendMessage(`${label}${i > 0 ? ` (${i})` : ""}\n${chunk}`).catch((e: unknown) =>
+        ctx.telegram.sendMessage(`${label} ERROR: ${e instanceof Error ? e.message : String(e)}`),
+      );
+    }
+  }
 
   return result;
 }
