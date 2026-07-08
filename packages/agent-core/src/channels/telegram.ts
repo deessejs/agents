@@ -84,13 +84,10 @@ async function transcribeVoice(voice: TelegramVoice, botToken: string): Promise<
   }
   const audioBuffer = await audioResponse.arrayBuffer();
 
-  // Step 3: transcribe via Groq Whisper
+  // Step 3: transcribe via Groq Whisper (language auto-detected when not specified)
   const result = await transcribe({
     model: groq.transcription("whisper-large-v3"),
     audio: new Uint8Array(audioBuffer),
-    providerOptions: {
-      groq: { language: "auto" },
-    },
   });
 
   return result.text;
