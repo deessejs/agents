@@ -106,7 +106,8 @@ async function transcribeVoice(voice: TelegramVoice, botToken: string): Promise<
     throw new Error(`Groq transcription failed (${groqResponse.status}): ${text}`);
   }
 
-  const data = (await groqResponse.json()) as { text?: string };
+  const data = (await groqResponse.json()) as { text?: string; language?: string; duration?: number };
+  console.log("Groq transcription response:", JSON.stringify(data));
   return data.text ?? "";
 }
 
