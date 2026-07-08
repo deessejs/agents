@@ -19,6 +19,34 @@ importers:
         specifier: ^2.5.0
         version: 2.10.4
 
+  apps/general-assistant:
+    dependencies:
+      '@ds-team/agent-core':
+        specifier: workspace:*
+        version: link:../../packages/agent-core
+      ai:
+        specifier: ^7.0.16
+        version: 7.0.16(zod@4.4.3)
+      eve:
+        specifier: ^0.20.0
+        version: 0.20.0(ai@7.0.16(zod@4.4.3))
+      vercel-minimax-ai-provider:
+        specifier: ^0.0.2
+        version: 0.0.2(zod@4.4.3)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@ds-team/typescript-config':
+        specifier: workspace:*
+        version: link:../../packages/typescript-config
+      '@types/node':
+        specifier: 24.x
+        version: 24.13.2
+      typescript:
+        specifier: 7.0.1-rc
+        version: 7.0.1-rc
+
   apps/head-of-engineering:
     dependencies:
       '@ai-sdk/groq':
