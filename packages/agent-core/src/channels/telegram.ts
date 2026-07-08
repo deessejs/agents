@@ -48,72 +48,32 @@ async function defaultOnMessageImpl(
   return { auth: defaultTelegramAuth(msg) };
 }
 
-// ---------------------------------------------------------------------------
-// Debug onMessage — logs everything then delegates to the real handler.
-// Remove this and the debug wrapper below once you're done debugging.
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// TODO: replace debugOnMessage with defaultOnMessageImpl when done debugging
-// ---------------------------------------------------------------------------
-
-async function debugOnMessage(
+/**
+ * Production onMessage: whitelist check + real handler.
+ *
+ * Enforces TELEGRAM_ALLOWED_USER_ID (from this app's .env) before
+ * dispatching to the agent. Unauthorized callers get a plain reply.
+ */
+async function onMessage(
   ctx: { telegram: { startTyping(): Promise<void>; botUsername?: string; sendMessage(text: string): Promise<unknown> } },
-  msg: Parameters<typeof shouldDispatchTelegramMessage>[0] & { raw?: unknown },
+  msg: Parameters<typeof shouldDispatchTelegramMessage>[0],
 ) {
-  // Run the real handler first so the agent starts responding
-  const result = await defaultOnMessageImpl(ctx, msg);
-  if (!result) return null;
-
-  // Build debug payloads
-  const raw = JSON.stringify(msg.raw ?? {}, null, 2);
-  const parsed = JSON.stringify(
-    {
-      from: msg.from,
-      chat: msg.chat,
-      messageId: (msg as Record<string, unknown>).messageId,
-      text: msg.text,
-      caption: msg.caption,
-      messageThreadId: (msg as Record<string, unknown>).messageThreadId,
-      replyToMessage: (msg as Record<string, unknown>).replyToMessage,
-      attachments: msg.attachments,
-    },
-    null,
-    2,
-  );
-  const authStr = JSON.stringify(result, null, 2);
-
-  // Summary first — plain text, sends right now, caught errors bubble up
-  await ctx.telegram.sendMessage(
-    `[DEBUG] from=${msg.from?.username ?? msg.from?.id ?? "?"} | ` +
-    `chat=${msg.chat.id} (${msg.chat.type}) | ` +
-    `text="${(msg.text ?? msg.caption ?? "").substring(0, 80)}"`,
-  );
-
-  // Raw, parsed, auth — split into 4000-char chunks to stay under Telegram's limit
-  for (const [label, data] of [
-    ["[RAW]", raw],
-    ["[PARSED]", parsed],
-    ["[AUTH]", authStr],
-  ] as const) {
-    for (let i = 0; i < data.length; i += 4000) {
-      const chunk = data.substring(i, i + 4000);
-      await ctx.telegram.sendMessage(`${label}${i > 0 ? ` (${i})` : ""}\n${chunk}`).catch((e: unknown) =>
-        ctx.telegram.sendMessage(`${label} ERROR: ${e instanceof Error ? e.message : String(e)}`),
-      );
-    }
+  const allowedUserId = process.env.TELEGRAM_ALLOWED_USER_ID;
+  if (allowedUserId && msg.from?.id !== allowedUserId) {
+    await ctx.telegram.sendMessage("Access denied.");
+    return null;
   }
-
-  return result;
+  return defaultOnMessageImpl(ctx, msg);
 }
 
 /**
  * Telegram channel shared across ds-team agents.
  *
  * Reads credentials from the environment (so each app can have its own bot):
- *   TELEGRAM_BOT_TOKEN         — from @BotFather
+ *   TELEGRAM_BOT_TOKEN            — from @BotFather
  *   TELEGRAM_WEBHOOK_SECRET_TOKEN — random hex you also send to setWebhook
- *   TELEGRAM_BOT_USERNAME      — the @handle BotFather assigned (no `@` prefix)
+ *   TELEGRAM_BOT_USERNAME        — the @handle BotFather assigned (no `@` prefix)
+ *   TELEGRAM_ALLOWED_USER_ID      — Telegram user ID that is allowed to use this bot
  *
  * If any of these is missing at agent startup, the channel factory will
  * throw — declare them in .env before running eve dev or deploying.
@@ -150,8 +110,7 @@ export function makeTelegramChannel() {
       allowedMediaTypes: ["image/*", "application/pdf"],
       maxBytes: 10 * 1024 * 1024,
     },
-    // TODO: switch to defaultOnMessageImpl once debug is done
-    onMessage: debugOnMessage,
+    onMessage,
   });
 }
 
