@@ -56,10 +56,10 @@ async function defaultOnMessageImpl(
  * Flow:
  *   1. Call getFile on the Telegram Bot API to get the file path
  *   2. Download the OGG audio from Telegram's file server
- *   3. Transcribe via Groq Whisper
+ *   3. Transcribe via Groq Whisper REST API
  */
 async function transcribeVoice(voice: TelegramVoice, botToken: string): Promise<string> {
-  // Step 1: getFile → returns { file_path: "voice/file_001.ogg" }
+  // Step 1: getFile → returns { file_path: "voice/file_001.oga" }
   const getFileResponse = await fetch(
     `https://api.telegram.org/bot${botToken}/getFile?file_id=${voice.file_id}`,
   );
@@ -75,7 +75,6 @@ async function transcribeVoice(voice: TelegramVoice, botToken: string): Promise<
   }
 
   // Step 2: download the audio file from Telegram
-  // Telegram serves voice messages as .oga files (Ogg container + Opus codec).
   const fileUrl = `https://api.telegram.org/file/bot${botToken}/${getFileData.result.file_path}`;
   const audioResponse = await fetch(fileUrl);
   if (!audioResponse.ok) {
@@ -83,15 +82,14 @@ async function transcribeVoice(voice: TelegramVoice, botToken: string): Promise<
   }
   const audioBuffer = await audioResponse.arrayBuffer();
 
-  // Step 3: transcribe via Groq Whisper API directly
-  // We call the API with fetch because we need to control the multipart
-  // filename so Groq's extension allowlist accepts .oga audio (Ogg/Opus).
+  // Step 3: transcribe via Groq Whisper REST API
+  // Groq validates the filename extension in multipart form-data.
+  // Telegram serves voice as .oga (Ogg/Opus bytes) — Groq only accepts .ogg.
+  // We pass "voice.ogg" as filename; the bytes are identical.
   const groqApiKey = process.env.GROQ_API_KEY;
   if (!groqApiKey) throw new Error("GROQ_API_KEY is not set");
 
   const form = new FormData();
-  // Use .ogg extension so Groq's allowlist (ogg, opus, mp3, ...) accepts it.
-  // The bytes are identical — Telegram serves Ogg/Opus in a .oga container.
   form.append("file", new File([audioBuffer], "voice.ogg", { type: "audio/ogg" }));
   form.append("model", "whisper-large-v3");
 
@@ -133,7 +131,17 @@ function makeOnMessage(botToken: string): (
         await ctx.telegram.sendMessage("🎤 Transcribing...");
         const transcript = await transcribeVoice(voice, botToken);
         await ctx.telegram.sendMessage(`📝 ${transcript}`);
-        return defaultOnMessageImpl(ctx, { ...msg, text: transcript } as TelegramMessage);
+
+        if (!shouldDispatchTelegramMessage(msg, ctx.telegram.botUsername)) return null;
+        await ctx.telegram.startTyping();
+
+        // Pass the transcript in the context block so the model sees it.
+        // dispatchMessage prepends the telegram context block, so we add the
+        // transcript after it. The model sees: [telegram_block, transcript].
+        return {
+          auth: defaultTelegramAuth(msg),
+          context: [`<voice_transcript>${transcript}</voice_transcript>`],
+        };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         await ctx.telegram.sendMessage(`Transcription failed: ${message}`);
@@ -153,7 +161,7 @@ function makeOnMessage(botToken: string): (
  *   TELEGRAM_WEBHOOK_SECRET_TOKEN — random hex you also send to setWebhook
  *   TELEGRAM_BOT_USERNAME        — the @handle BotFather assigned (no `@` prefix)
  *   TELEGRAM_ALLOWED_USER_ID      — Telegram user ID that is allowed to use this bot
- *   GROQ_API_KEY                 — Groq API key for voice message transcription
+ *   GROQ_API_KEY               — Groq API key for voice message transcription
  *
  * If any of the required credentials are missing at agent startup, the channel
  * factory will throw — declare them in .env before running eve dev or deploying.
