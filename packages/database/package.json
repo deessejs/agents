@@ -1,0 +1,36 @@
+{
+  "name": "@ds-team/database",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./queries": "./src/queries.ts",
+    "./schema": "./src/schema.ts",
+    "./client": "./src/client.ts",
+    "./lib/embed": "./src/lib/embed.ts",
+    "./tools/memory": "./src/tools/memory.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "drizzle-kit": "drizzle-kit",
+    "generate": "drizzle-kit generate",
+    "migrate": "drizzle-kit migrate",
+    "studio": "drizzle-kit studio",
+    "check": "drizzle-kit check"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.0",
+    "drizzle-orm": "^0.45.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.x",
+    "dotenv": "^16.0.0",
+    "drizzle-kit": "^0.31.0",
+    "tsx": "^4.0.0",
+    "typescript": "7.0.1-rc"
+  },
+  "peerDependencies": {
+    "eve": "^0.20.0"
+  }
+}
