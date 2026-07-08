@@ -56,6 +56,15 @@ function makeOnMessage(): (
       await ctx.telegram.sendMessage("Access denied.");
       return null;
     }
+
+    // Fake voice handling: intercept vocal messages, reply, and send a dummy text
+    // to the agent so the pipeline doesn't break on an empty turn.
+    const raw = msg.raw as Record<string, unknown>;
+    if (raw?.voice) {
+      await ctx.telegram.sendMessage("🎤 Voice message received — processing...");
+      return defaultOnMessageImpl(ctx, { ...msg, text: "hey, this is a vocal message" } as TelegramMessage);
+    }
+
     return defaultOnMessageImpl(ctx, msg);
   };
 }
