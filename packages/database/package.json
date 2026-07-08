@@ -19,6 +19,7 @@
     "check": "drizzle-kit check"
   },
   "dependencies": {
+    "@ai-sdk/gateway": "^4.0.0",
     "@neondatabase/serverless": "^0.10.0",
     "ai": "^7.0.0",
     "drizzle-orm": "^0.45.0",
