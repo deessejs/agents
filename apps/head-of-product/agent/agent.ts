@@ -20,4 +20,7 @@ import { minimax } from "vercel-minimax-ai-provider";
 // accepts "MiniMax-M3", this works. If it 404s, fall back to "MiniMax-M2.7".
 export default defineAgent({
   model: minimax("MiniMax-M3"),
+  build: {
+    externalDependencies: ["ai", "@ai-sdk/groq"],
+  },
 });
