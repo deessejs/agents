@@ -1,5 +1,57 @@
-import { telegramChannel } from "eve/channels/telegram";
-import { defaultOnMessage } from "eve/channels/telegram";
+import { telegramChannel, defaultTelegramAuth } from "eve/channels/telegram";
+
+/**
+ * Inline re-implementation of shouldDispatchTelegramMessage from eve defaults.
+ * Dispatch a message if it has text/content and either:
+ *   - it's a DM (private chat)
+ *   - it replies to the bot
+ *   - it's a bot command directed at this bot
+ *   - it mentions the bot
+ */
+function shouldDispatchTelegramMessage(msg: {
+  from?: { isBot?: boolean };
+  chat: { type: string };
+  text?: string;
+  caption?: string;
+  attachments: unknown[];
+  replyToMessage?: { from?: { isBot?: boolean } };
+}, botUsername?: string): boolean {
+  if (msg.from?.isBot === true || msg.chat.type === "channel") return false;
+  const text = msg.text ?? msg.caption;
+  const hasContent = (text?.trim().length ?? 0) > 0 || msg.attachments.length > 0;
+  if (!hasContent) return false;
+  if (msg.chat.type === "private") return true;
+  if (msg.replyToMessage?.from?.isBot === true) return true;
+
+  // Bot command: /command@botname or /command alone
+  const cmdMatch = /^\/(?<command>[A-Za-z0-9_]+)(?:@(?<target>[A-Za-z0-9_]+))?(?:\s|$)/u.exec(text ?? "");
+  if (cmdMatch) {
+    const target = cmdMatch.groups?.target;
+    return target === undefined || (botUsername !== undefined && target.toLowerCase() === botUsername.toLowerCase());
+  }
+
+  // Mention: @botUsername
+  if (botUsername !== undefined && text?.toLowerCase().includes(`@${botUsername.toLowerCase()}`)) return true;
+
+  return false;
+}
+
+/**
+ * Inline re-implementation of defaultOnMessage from eve defaults.
+ */
+async function defaultOnMessageImpl(
+  ctx: { telegram: { startTyping(): Promise<void>; botUsername?: string } },
+  msg: Parameters<typeof shouldDispatchTelegramMessage>[0],
+) {
+  if (!shouldDispatchTelegramMessage(msg, ctx.telegram.botUsername)) return null;
+  await ctx.telegram.startTyping();
+  return { auth: defaultTelegramAuth(msg) };
+}
+
+// ---------------------------------------------------------------------------
+// Debug onMessage — logs everything then delegates to the real handler.
+// Remove this and the debug wrapper below once you're done debugging.
+// ---------------------------------------------------------------------------
 
 /**
  * Debug onMessage that logs all Telegram message data and the resulting
@@ -7,46 +59,40 @@ import { defaultOnMessage } from "eve/channels/telegram";
  *
  * Logs to stdout — look for it in the eve dev terminal.
  */
-async function debugOnMessage(ctx, msg) {
-  const rawFrom = msg.raw?.from ?? null;
-  const rawChat = msg.raw?.chat ?? null;
-
+async function debugOnMessage(
+  ctx: Parameters<typeof defaultOnMessageImpl>[0],
+  msg: Parameters<typeof shouldDispatchTelegramMessage>[0] & { raw?: unknown },
+) {
   console.log("=== Telegram inbound ===");
+
   console.log("--- Raw Telegram body (from webhook) ---");
-  console.log(JSON.stringify(msg.raw, null, 2));
+  console.log(JSON.stringify(msg.raw ?? {}, null, 2));
 
   console.log("\n--- Parsed message object ---");
-  console.log(JSON.stringify(
-    {
-      from: msg.from,
-      chat: msg.chat,
-      messageId: msg.messageId,
-      text: msg.text,
-      caption: msg.caption,
-      messageThreadId: msg.messageThreadId,
-      replyToMessage: msg.replyToMessage,
-      attachments: msg.attachments,
-    },
-    null,
-    2,
-  ));
+  console.log(
+    JSON.stringify(
+      {
+        from: msg.from,
+        chat: msg.chat,
+        messageId: (msg as Record<string, unknown>).messageId,
+        text: msg.text,
+        caption: msg.caption,
+        messageThreadId: (msg as Record<string, unknown>).messageThreadId,
+        replyToMessage: (msg as Record<string, unknown>).replyToMessage,
+        attachments: msg.attachments,
+      },
+      null,
+      2,
+    ),
+  );
 
-  const auth = defaultOnMessage(ctx, msg);
+  const result = await defaultOnMessageImpl(ctx, msg);
 
   console.log("\n--- Auth context being returned ---");
-  if (auth && typeof auth.then === "function") {
-    // auth is a promise
-    auth.then((resolved) => {
-      console.log(JSON.stringify(resolved, null, 2));
-      console.log("=== end Telegram inbound ===\n");
-      return resolved;
-    });
-    return auth;
-  } else {
-    console.log(JSON.stringify(auth, null, 2));
-    console.log("=== end Telegram inbound ===\n");
-    return auth;
-  }
+  console.log(JSON.stringify(result, null, 2));
+  console.log("=== end Telegram inbound ===\n");
+
+  return result;
 }
 
 /**
@@ -92,6 +138,7 @@ export function makeTelegramChannel() {
       allowedMediaTypes: ["image/*", "application/pdf"],
       maxBytes: 10 * 1024 * 1024,
     },
+    // TODO: switch to defaultOnMessageImpl once debug is done
     onMessage: debugOnMessage,
   });
 }
