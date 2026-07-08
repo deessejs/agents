@@ -14,8 +14,9 @@
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@ai-sdk/groq": "^4.0.5",
     "@ds-team/agent-core": "workspace:*",
-    "ai": "^7.0.0",
+    "ai": "^7.0.16",
     "eve": "^0.20.0",
     "vercel-minimax-ai-provider": "^0.0.2",
     "zod": "4.4.3"

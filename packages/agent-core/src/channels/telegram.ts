@@ -6,6 +6,15 @@ import {
   type TelegramInboundResult,
   type TelegramInboundResultOrPromise,
 } from "eve/channels/telegram";
+import { transcribe } from "ai";
+import { groq } from "@ai-sdk/groq";
+
+interface TelegramVoice {
+  file_id: string;
+  duration?: number;
+  mime_type?: string;
+  file_size?: number;
+}
 
 /**
  * Inline re-implementation of shouldDispatchTelegramMessage from eve defaults.
@@ -44,9 +53,53 @@ async function defaultOnMessageImpl(
 }
 
 /**
+ * Transcribe a Telegram voice message using Groq's Whisper API.
+ *
+ * Flow:
+ *   1. Call getFile on the Telegram Bot API to get the file path
+ *   2. Download the OGG audio from Telegram's file server
+ *   3. Transcribe via Groq Whisper
+ */
+async function transcribeVoice(voice: TelegramVoice, botToken: string): Promise<string> {
+  // Step 1: getFile → returns { file_path: "voice/file_001.ogg" }
+  const getFileResponse = await fetch(
+    `https://api.telegram.org/bot${botToken}/getFile?file_id=${voice.file_id}`,
+  );
+  if (!getFileResponse.ok) {
+    throw new Error(`Telegram getFile failed: ${getFileResponse.status}`);
+  }
+  const getFileData = (await getFileResponse.json()) as {
+    ok: boolean;
+    result?: { file_path: string };
+  };
+  if (!getFileData.ok || !getFileData.result?.file_path) {
+    throw new Error(`Telegram getFile returned an error: ${JSON.stringify(getFileData)}`);
+  }
+
+  // Step 2: download the OGG audio file
+  const fileUrl = `https://api.telegram.org/file/bot${botToken}/${getFileData.result.file_path}`;
+  const audioResponse = await fetch(fileUrl);
+  if (!audioResponse.ok) {
+    throw new Error(`Telegram file download failed: ${audioResponse.status}`);
+  }
+  const audioBuffer = await audioResponse.arrayBuffer();
+
+  // Step 3: transcribe via Groq Whisper
+  const result = await transcribe({
+    model: groq.transcription("whisper-large-v3"),
+    audio: new Uint8Array(audioBuffer),
+    providerOptions: {
+      groq: { language: "auto" },
+    },
+  });
+
+  return result.text;
+}
+
+/**
  * Production onMessage: whitelist check + real handler.
  */
-function makeOnMessage(): (
+function makeOnMessage(botToken: string): (
   ctx: TelegramContext,
   msg: TelegramMessage,
 ) => TelegramInboundResultOrPromise {
@@ -57,12 +110,25 @@ function makeOnMessage(): (
       return null;
     }
 
-    // Fake voice handling: intercept vocal messages, reply, and send a dummy text
-    // to the agent so the pipeline doesn't break on an empty turn.
     const raw = msg.raw as Record<string, unknown>;
-    if (raw?.voice) {
-      await ctx.telegram.sendMessage("🎤 Voice message received — processing...");
-      return defaultOnMessageImpl(ctx, { ...msg, text: "hey, this is a vocal message" } as TelegramMessage);
+    const voice = raw?.voice as TelegramVoice | undefined;
+
+    if (voice) {
+      const groqApiKey = process.env.GROQ_API_KEY;
+      if (!groqApiKey) {
+        await ctx.telegram.sendMessage("Voice transcription is not configured (GROQ_API_KEY missing).");
+        return null;
+      }
+
+      try {
+        await ctx.telegram.sendMessage("🎤 Transcribing...");
+        const transcript = await transcribeVoice(voice, botToken);
+        return defaultOnMessageImpl(ctx, { ...msg, text: transcript } as TelegramMessage);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await ctx.telegram.sendMessage(`Transcription failed: ${message}`);
+        return null;
+      }
     }
 
     return defaultOnMessageImpl(ctx, msg);
@@ -77,6 +143,7 @@ function makeOnMessage(): (
  *   TELEGRAM_WEBHOOK_SECRET_TOKEN — random hex you also send to setWebhook
  *   TELEGRAM_BOT_USERNAME        — the @handle BotFather assigned (no `@` prefix)
  *   TELEGRAM_ALLOWED_USER_ID      — Telegram user ID that is allowed to use this bot
+ *   GROQ_API_KEY                 — Groq API key for voice message transcription
  *
  * If any of the required credentials are missing at agent startup, the channel
  * factory will throw — declare them in .env before running eve dev or deploying.
@@ -113,7 +180,7 @@ export function makeTelegramChannel() {
       allowedMediaTypes: ["image/*", "application/pdf"],
       maxBytes: 10 * 1024 * 1024,
     },
-    onMessage: makeOnMessage(),
+    onMessage: makeOnMessage(botToken),
   });
 }
 

@@ -20,6 +20,8 @@
     "typescript": "7.0.1-rc"
   },
   "peerDependencies": {
+    "@ai-sdk/groq": "*",
+    "ai": "*",
     "eve": "^0.20.0"
   }
 }
