@@ -6,8 +6,6 @@ import {
   type TelegramInboundResult,
   type TelegramInboundResultOrPromise,
 } from "eve/channels/telegram";
-import { transcribe } from "ai";
-import { groq } from "@ai-sdk/groq";
 
 interface TelegramVoice {
   file_id: string;
@@ -76,7 +74,8 @@ async function transcribeVoice(voice: TelegramVoice, botToken: string): Promise<
     throw new Error(`Telegram getFile returned an error: ${JSON.stringify(getFileData)}`);
   }
 
-  // Step 2: download the OGG audio file
+  // Step 2: download the audio file from Telegram
+  // Telegram serves voice messages as .oga files (Ogg container + Opus codec).
   const fileUrl = `https://api.telegram.org/file/bot${botToken}/${getFileData.result.file_path}`;
   const audioResponse = await fetch(fileUrl);
   if (!audioResponse.ok) {
@@ -84,13 +83,31 @@ async function transcribeVoice(voice: TelegramVoice, botToken: string): Promise<
   }
   const audioBuffer = await audioResponse.arrayBuffer();
 
-  // Step 3: transcribe via Groq Whisper (language auto-detected when not specified)
-  const result = await transcribe({
-    model: groq.transcription("whisper-large-v3"),
-    audio: new Uint8Array(audioBuffer),
+  // Step 3: transcribe via Groq Whisper API directly
+  // We call the API with fetch because we need to control the multipart
+  // filename so Groq's extension allowlist accepts .oga audio (Ogg/Opus).
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (!groqApiKey) throw new Error("GROQ_API_KEY is not set");
+
+  const form = new FormData();
+  // Use .ogg extension so Groq's allowlist (ogg, opus, mp3, ...) accepts it.
+  // The bytes are identical — Telegram serves Ogg/Opus in a .oga container.
+  form.append("file", new File([audioBuffer], "voice.ogg", { type: "audio/ogg" }));
+  form.append("model", "whisper-large-v3");
+
+  const groqResponse = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${groqApiKey}` },
+    body: form,
   });
 
-  return result.text;
+  if (!groqResponse.ok) {
+    const text = await groqResponse.text();
+    throw new Error(`Groq transcription failed (${groqResponse.status}): ${text}`);
+  }
+
+  const data = (await groqResponse.json()) as { text?: string };
+  return data.text ?? "";
 }
 
 /**
@@ -111,12 +128,6 @@ function makeOnMessage(botToken: string): (
     const voice = raw?.voice as TelegramVoice | undefined;
 
     if (voice) {
-      const groqApiKey = process.env.GROQ_API_KEY;
-      if (!groqApiKey) {
-        await ctx.telegram.sendMessage("Voice transcription is not configured (GROQ_API_KEY missing).");
-        return null;
-      }
-
       try {
         await ctx.telegram.sendMessage("🎤 Transcribing...");
         const transcript = await transcribeVoice(voice, botToken);
