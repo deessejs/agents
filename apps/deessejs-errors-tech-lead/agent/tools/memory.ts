@@ -1,5 +1,7 @@
-// Re-export the centralized memory tool from @ds-team/database.
-// The agent context (ctx.agent.id = "deessejs-errors-tech-lead") is read
-// at runtime by the centralized tool — never via the LLM input schema.
-// See docs/internal/reports/memory-schema-refactor-2026-07-09.md.
-export { default, memoryShare, memoryUnshare } from "@ds-team/database/tools/memory";
+// Per-agent memory tools. agentId is baked in via the factory closure —
+// the LLM cannot fake it. See docs/internal/reports/memory-schema-refactor-2026-07-09.md.
+import { createMemoryTools } from "@ds-team/database/tools/memory";
+const tools = createMemoryTools("deessejs-errors-tech-lead");
+export default tools.memory;
+export const memoryShare = tools.memoryShare;
+export const memoryUnshare = tools.memoryUnshare;
