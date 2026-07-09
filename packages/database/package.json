@@ -7,7 +7,6 @@
     "./queries": "./src/queries.ts",
     "./schema": "./src/schema.ts",
     "./client": "./src/client.ts",
-    "./lib/embed": "./src/lib/embed.ts",
     "./tools/memory": "./src/tools/memory.ts"
   },
   "scripts": {

@@ -1,13 +1,13 @@
-import { and, cosineDistance, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { getDb } from "./client.js";
 import { memories } from "./schema.js";
 
 // ---------------------------------------------------------------------------
-// Search
+// Types
 // ---------------------------------------------------------------------------
 
 export interface SearchOptions {
-  embedding: number[];
+  query: string;
   userId?: string;
   scopes?: string[];
   tiers?: string[];
@@ -21,11 +21,28 @@ export interface MemoryRow {
   content: string;
   metadata: Record<string, unknown>;
   createdAt: Date;
-  similarity: number;
 }
 
+// ---------------------------------------------------------------------------
+// Search (keyword / full-text)
+// ---------------------------------------------------------------------------
+
 export async function searchMemories(opts: SearchOptions): Promise<MemoryRow[]> {
-  const similarity = sql`1 - ${cosineDistance(memories.embedding, opts.embedding)}`;
+  const { query, userId = "ceo", scopes, tiers, limit = 10 } = opts;
+
+  const conditions: SQL[] = [];
+
+  // Keyword search — always applied
+  conditions.push(sql`${memories.content} ILIKE ${"%" + query + "%"}`);
+
+  if (userId) conditions.push(eq(memories.userId, userId));
+  if (scopes?.length) conditions.push(inArray(memories.scope, scopes));
+  if (tiers?.length) conditions.push(inArray(memories.tier, tiers));
+  const expiresCondition = or(
+    isNull(memories.expiresAt),
+    sql`${memories.expiresAt} > now()`
+  );
+  if (expiresCondition) conditions.push(expiresCondition);
 
   const rows = await getDb()
     .select({
@@ -35,20 +52,11 @@ export async function searchMemories(opts: SearchOptions): Promise<MemoryRow[]> 
       content: memories.content,
       metadata: memories.metadata,
       createdAt: memories.createdAt,
-      similarity,
     })
     .from(memories)
-    .where(
-      and(
-        isNotNull(memories.embedding),
-        eq(memories.userId, opts.userId ?? "ceo"),
-        or(isNull(memories.expiresAt), sql`${memories.expiresAt} > now()`),
-        opts.scopes?.length ? inArray(memories.scope, opts.scopes) : undefined,
-        opts.tiers?.length ? inArray(memories.tier, opts.tiers) : undefined,
-      ),
-    )
-    .orderBy(sql`${similarity} DESC`)
-    .limit(opts.limit ?? 10);
+    .where(and(...conditions))
+    .orderBy(sql`${memories.createdAt} DESC`)
+    .limit(limit);
 
   return rows as MemoryRow[];
 }
@@ -61,8 +69,6 @@ export interface WriteOptions {
   scope: string;
   tier: string;
   content: string;
-  embedding?: number[] | null;
-  importance?: number;
   metadata?: Record<string, unknown>;
   expiresAt?: Date | null;
   userId?: string;
@@ -75,8 +81,6 @@ export async function writeMemory(input: WriteOptions) {
       scope: input.scope,
       tier: input.tier,
       content: input.content,
-      embedding: input.embedding ?? null,
-      importance: input.importance ?? 0.5,
       metadata: input.metadata ?? {},
       expiresAt: input.expiresAt ?? null,
       userId: input.userId ?? "ceo",
@@ -94,14 +98,12 @@ export async function updateMemory(
   id: number,
   content: string,
   mode: "append" | "overwrite",
-  newEmbedding?: number[] | null,
 ) {
   if (mode === "append") {
     const [row] = await getDb()
       .update(memories)
       .set({
         content: sql`${memories.content} || ${"\n"} || ${content}`,
-        embedding: newEmbedding ?? memories.embedding,
         updatedAt: sql`now()`,
       })
       .where(eq(memories.id, id))
@@ -110,11 +112,7 @@ export async function updateMemory(
   } else {
     const [row] = await getDb()
       .update(memories)
-      .set({
-        content,
-        embedding: newEmbedding ?? null,
-        updatedAt: sql`now()`,
-      })
+      .set({ content, updatedAt: sql`now()` })
       .where(eq(memories.id, id))
       .returning();
     return row;
@@ -122,7 +120,7 @@ export async function updateMemory(
 }
 
 // ---------------------------------------------------------------------------
-// Delete
+// Delete (soft)
 // ---------------------------------------------------------------------------
 
 export async function forgetMemory(id: number): Promise<void> {
@@ -133,7 +131,7 @@ export async function forgetMemory(id: number): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Core memory (read all core rows for user)
+// Core memory
 // ---------------------------------------------------------------------------
 
 export async function readCoreMemory(userId = "ceo"): Promise<string> {
@@ -149,5 +147,5 @@ export async function readCoreMemory(userId = "ceo"): Promise<string> {
     )
     .orderBy(memories.createdAt);
 
-  return rows.map((r: { content: string }) => r.content).join("\n");
+  return rows.map((r) => r.content).join("\n");
 }
