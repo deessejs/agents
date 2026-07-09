@@ -1,5 +1,5 @@
 import { and, cosineDistance, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { db } from "./client.js";
+import { getDb } from "./client.js";
 import { memories } from "./schema.js";
 
 // ---------------------------------------------------------------------------
@@ -27,7 +27,7 @@ export interface MemoryRow {
 export async function searchMemories(opts: SearchOptions): Promise<MemoryRow[]> {
   const similarity = sql`1 - ${cosineDistance(memories.embedding, opts.embedding)}`;
 
-  const rows = await db
+  const rows = await getDb()
     .select({
       id: memories.id,
       scope: memories.scope,
@@ -69,7 +69,7 @@ export interface WriteOptions {
 }
 
 export async function writeMemory(input: WriteOptions) {
-  const [row] = await db
+  const [row] = await getDb()
     .insert(memories)
     .values({
       scope: input.scope,
@@ -97,7 +97,7 @@ export async function updateMemory(
   newEmbedding?: number[] | null,
 ) {
   if (mode === "append") {
-    const [row] = await db
+    const [row] = await getDb()
       .update(memories)
       .set({
         content: sql`${memories.content} || ${"\n"} || ${content}`,
@@ -108,7 +108,7 @@ export async function updateMemory(
       .returning();
     return row;
   } else {
-    const [row] = await db
+    const [row] = await getDb()
       .update(memories)
       .set({
         content,
@@ -126,7 +126,7 @@ export async function updateMemory(
 // ---------------------------------------------------------------------------
 
 export async function forgetMemory(id: number): Promise<void> {
-  await db
+  await getDb()
     .update(memories)
     .set({ expiresAt: sql`now()` })
     .where(eq(memories.id, id));
@@ -137,7 +137,7 @@ export async function forgetMemory(id: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function readCoreMemory(userId = "ceo"): Promise<string> {
-  const rows = await db
+  const rows = await getDb()
     .select({ content: memories.content })
     .from(memories)
     .where(
