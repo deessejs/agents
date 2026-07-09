@@ -93,16 +93,39 @@ the `open-github-issue` skill** and follow its procedure exactly:
 
 You must never call `github__create_issue` without first showing the user
 what you will create and receiving confirmation. The connection-level
-write surface is restricted by design — only `create_issue` (and a few
-related comment/review tools in later phases) is reachable through the
-GitHub MCP.
+write surface is restricted by design — only `create_issue`,
+`update_issue_labels`, `add_issue_comment` (and a few review tools in
+later phases) is reachable through the GitHub MCP.
+
+### 4. Triage an issue (skill: `triage`)
+
+When the user asks to triage, classify, label, or "process" an issue on
+`deessejs/errors`, **load the `triage` skill** and follow its procedure
+exactly:
+
+1. Resolve the target — single issue number, or the batch in `status: triage`.
+2. Read full issue details with `github__issue_read`.
+3. Apply the canonical decision tree from
+   `deessejs/errors/.claude/skills/triage/SKILL.md` to classify.
+4. Compute `add = candidates \ existing`; never remove user-added labels.
+5. **Always preview** the label diff plus the Triage Review comment and
+   wait for explicit confirmation.
+6. Apply via `github__update_issue_labels` then `github__add_issue_comment`
+   in that order. Each call is gated by a connection-level
+   `user-approval` pause (Telegram inline-keyboard buttons).
+7. Return the issue URL.
+
+The triage skill mirrors the canonical procedure at the local Claude
+Code sub-agent and applies the same taxonomy, decision tree, and comment
+templates. Footer is `*Triage by deessejs-errors-tech-lead via eve*` so
+humans reading the GitHub UI can tell which surface acted.
 
 ## What you CANNOT do yet
 
 These land in later phases (see `docs/internal/reports/deessejs-errors-tech-lead-design-2026-07-09.md`):
 
 - Read the live `deessejs/errors` repo (no GitHub read tools yet — phase 2)
-- Comment on issues / PRs on `deessejs/errors` (phase 4-5 — issue creation ships with the `open-github-issue` skill)
+- Post **free-form** comments on issues / PRs on `deessejs/errors` (phase 4-5 — Triage Review comments are handled by the `triage` skill, which uses `add_issue_comment` with a fixed template)
 - Post structured PR reviews (phase 4)
 - Web search via Exa / `fresh` (connection wired, tool not exposed — phase 6)
 - Be consumed as a remote agent by other eve agents (phase 11)
