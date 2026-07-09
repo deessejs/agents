@@ -7,73 +7,59 @@ import { defineMcpClientConnection } from "eve/connections";
  * Auth:    PAT passed as `Authorization: Bearer …`
  * Env var: GITHUB_TOKEN  (https://github.com/settings/tokens)
  *
- * Security stance:
- * - `X-MCP-Readonly: true` puts the server in read-only mode: it filters
- *   out every write tool regardless of any other configuration (per the
- *   upstream server docs). This is a structural block, not a textual one.
- * - `X-MCP-Tools` re-enables a small, explicit allowlist of write tools.
- *   The list is the single source of truth for which write surfaces agents
- *   can reach. To extend it (e.g. add review_pr for phase 4), append to
- *   the list — nothing else changes.
- * - The MCP server exposes many write tools (push_commit,
- *   merge_pull_request, create_pull_request, dismiss_review,
- *   request_review, update_pull_request_branch, edit_labels, ...).
- *   Blocked by default; only the names in `X-MCP-Tools` below are
- *   reachable.
- * - The `approval` policy below gates the writes further: every call to a
- *   tool in the allowlist pauses for a human confirmation through the
- *   channel's HITL surface (Telegram inline-keyboard buttons for the
- *   tech-lead). Reads stay ungated because the daily-digest schedule and
- *   other consumers rely on them firing without user input.
+ * Security stance (revised 2026-07-09 after several pivots — see commit
+ * messages):
  *
- * Today the allowlist is (added 2026-07-09):
- *   create_issue          — open-github-issue skill
- *   update_issue_labels   — triage skill (replace label set on an issue)
- *   add_issue_comment     — triage skill (post a Triage Review comment)
+ * - The connection is **permissive by design**. Reads AND writes are
+ *   exposed. The model's behavior is shaped by:
+ *     - the agent's system prompt (`instructions.md`) per agent
+ *     - the canonical skill bodies (`agent/skills/*.md`)
+ *     - conversation-level preview-then-confirm in the skill procedures
  *
- * Verified against the upstream toolsnap files in
- * github/github-mcp-server/pkg/github/__toolsnaps__/ — the granular
- * `update_issue_labels` (replaces the whole label set) is preferred over
- * an umbrella `update_issue` because the latter is split into per-field
- * tools by the upstream server (update_issue_state, update_issue_title,
- * update_issue_body, update_issue_assignees, update_issue_milestone,
- * update_issue_type, update_issue_labels). Triage only needs to add
- * labels, so `update_issue_labels` is the surgical choice. Same logic
- * for comments: `add_issue_comment` is the dedicated POST, not a generic
- * `update_issue`.
+ * - We do NOT use `X-MCP-Readonly: true`. The upstream server docs are
+ *   explicit: read-only mode is a strict security filter that takes
+ *   precedence over any other configuration, including `X-MCP-Tools`.
+ *   When it was set, the model reported the allowed writes
+ *   (github__create_issue, github__update_issue_labels,
+ *   github__add_issue_comment) as not exposed.
+ *
+ * - We do NOT use `X-MCP-Exclude-Tools` (per design pivot). The surface
+ *   stays open; the system prompt + skill bodies are the behavioral
+ *   control.
+ *
+ * - We do NOT use `approval` (per design pivot, 2026-07-09). Every
+ *   write runs without a HITL pause at the connection layer. The
+ *   skill-level preview-then-confirm in conversation is the soft gate.
+ *
+ * - We do NOT use the `tools: { allow | block }` field. That would be
+ *   client-side filtering in eve, also exclusion in spirit.
+ *
+ * - The only HTTP header set is `X-MCP-Toolsets`, scoping the upstream
+ *   toolset surface to repos / issues / pull_requests.
  *
  * Next step (not done now): replace this shared connection on
  * `deessejs-errors-tech-lead` with a dedicated one that hardcodes
- * `owner="deessejs"`, `repo="errors"` as defaults, so the repo scope is
- * enforced at the connection layer (the design-doc §6.2 / §7 commitment).
+ * `owner="deessejs"`, `repo="errors"` as defaults, so the repo scope
+ * is enforced at the connection layer (design doc §6.2 / §7).
  *
  * Discovered tools surface to the model as `github__*`
  *   e.g. github__get_file_contents, github__list_commits, github__list_issues,
  *        github__issue_read, github__create_issue, github__update_issue_labels,
- *        github__add_issue_comment.
+ *        github__add_issue_comment, … and all other upstream tools.
  */
 export function makeGitHubConnection() {
   return defineMcpClientConnection({
     url: "https://api.githubcopilot.com/mcp/",
     description:
-      "GitHub: read repositories, issues, pull requests, and code. Write surface is restricted by an explicit allowlist; today the reachable write tools are create_issue, update_issue_labels, and add_issue_comment.",
+      "GitHub: full read and write surface of the upstream MCP server. No gating at the connection layer — the agent's system prompt and skill bodies shape behavior, and skill procedures preview before writing.",
     auth: {
       getToken: async () => ({ token: process.env.GITHUB_TOKEN! }),
     },
     headers: {
-      "X-MCP-Readonly": "true",
+      // Toolsets: full surface — reads + writes. We don't filter at the
+      // connection layer; filtering happens at the LLM/system-prompt
+      // layer via the agent's instructions and skill bodies.
       "X-MCP-Toolsets": "repos,issues,pull_requests",
-      "X-MCP-Tools": "create_issue,update_issue_labels,add_issue_comment",
-    },
-    approval: ({ toolName }) => {
-      // Per node_modules/eve/docs/connections/mcp.mdx §"Gate specific tools
-      // by name or input", the qualified tool name arrives as
-      // `<connection>__<tool>`. Gate only the writes; reads stay ungated.
-      return toolName === "github__create_issue"
-        || toolName === "github__update_issue_labels"
-        || toolName === "github__add_issue_comment"
-        ? "user-approval"
-        : "not-applicable";
     },
   });
 }

@@ -6,7 +6,7 @@ description: Triage a GitHub issue on deessejs/errors — fetch, classify
   should #N be". Do NOT use to create new issues (use open-github-issue),
   to post free-form comments (phase 4-5), or to edit or close the issue.
   Always preview the label diff and the Triage Review comment before
-  applying; both writes hit a connection-level user-approval gate.
+  applying.
 ---
 
 # Triage an issue on `deessejs/errors`
@@ -26,7 +26,7 @@ Triage Progress:
 - [ ] Step 4: Compute `add = candidates \ existing`; never remove
 - [ ] Step 5: Compose the matching Triage Review comment
 - [ ] Step 6: Preview the label diff + comment, wait for explicit OK
-- [ ] Step 7: Apply `github__update_issue_labels` then `github__add_issue_comment` (both gated)
+- [ ] Step 7: Apply `github__update_issue_labels` then `github__add_issue_comment`
 - [ ] Step 8: Return the issue URL
 
 ## Required tools

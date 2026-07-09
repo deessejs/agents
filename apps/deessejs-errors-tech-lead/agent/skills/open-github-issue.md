@@ -21,7 +21,7 @@ Issue Progress:
 - [ ] Step 4: Read the chosen template
 - [ ] Step 5: Gather values from the user
 - [ ] Step 6: Preview the issue and wait for explicit OK
-- [ ] Step 7: Call `github__create_issue` (gated, user-approval)
+- [ ] Step 7: Call `github__create_issue`
 - [ ] Step 8: Return the issue URL
 
 ## 1. Confirm intent
