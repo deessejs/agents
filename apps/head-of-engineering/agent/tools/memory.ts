@@ -3,7 +3,6 @@
 // Scope defaults to 'engineering' for all writes.
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { embedText } from "@ds-team/database/lib/embed";
 import {
   searchMemories,
   writeMemory,
@@ -60,12 +59,10 @@ Rules:
       case "create": {
         if (!content) throw new Error("'create' requires 'content'");
         const resolved = path ? resolvePath(path) : { tier: tier ?? "core", metadata: {} };
-        const embedding = await embedText(content);
         const row = await writeMemory({
           scope: scope ?? SCOPE,
           tier: resolved.tier,
           content,
-          embedding,
           metadata: resolved.metadata,
         });
         return { id: row.id, message: `Memory created (id: ${row.id})` };
@@ -75,31 +72,19 @@ Rules:
         if (id === undefined || !content || !mode) {
           throw new Error("'update' requires 'id', 'content', and 'mode'");
         }
-        const newEmbedding = await embedText(content);
-        const row = await updateMemory(id, content, mode, newEmbedding);
+        const row = await updateMemory(id, content, mode);
         return { id: row?.id, message: `Memory updated (id: ${row?.id})` };
       }
 
       case "search": {
         if (!query) throw new Error("'search' requires 'query'");
-        const embedding = await embedText(query);
-        if (!embedding) return { results: [], message: "Embedding failed — no results" };
         const results = await searchMemories({
-          embedding,
+          query,
           scopes: scope ? [scope] : undefined,
           tiers: tier ? [tier] : undefined,
           limit: limit ?? 10,
         });
-        return {
-          results: results.map((r: { id: number; scope: string; tier: string; content: string; similarity: number; createdAt: Date }) => ({
-            id: r.id,
-            scope: r.scope,
-            tier: r.tier,
-            content: r.content,
-            similarity: r.similarity,
-            createdAt: r.createdAt,
-          })),
-        };
+        return { results };
       }
 
       case "forget": {
