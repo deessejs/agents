@@ -1,0 +1,4 @@
+{
+  "extends": "@ds-team/typescript-config/base.json",
+  "include": ["agent/**/*.ts", "evals/**/*.ts", ".eve/**/*.d.ts"]
+}

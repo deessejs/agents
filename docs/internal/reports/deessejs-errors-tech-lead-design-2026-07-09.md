@@ -78,7 +78,8 @@ The distinction between **residence** (where the agent lives) and **scope** (wha
 - Acting as a sub-agent inside the Claude Code loop (that remains the job of `.claude/agents/tech-lead/`)
 
 **Future (explicitly designed-for, not implemented yet):**
-- Acting as a remote agent reachable by other eve agents (e.g. `ds-team` head-of-engineering) via `defineRemoteAgent({ url, auth: vercelOidc() })`
+- Wiring `ds-team/apps/head-of-engineering/agent/subagents/deessejs-errors-tech-lead.ts` so that `head-of-engineering` can delegate to this tech-lead over Vercel OIDC (today it just doesn't reference it — adding the reference is a one-file change in phase 11)
+- Acting as a remote agent reachable by **external** eve agents (other orgs with Vercel OIDC trust into this team)
 - Persistent memory backed by the same `@ds-team/database` package used by `ds-team`
 - Web channel beyond HTTP-for-agents (browser UI / chat widget)
 
