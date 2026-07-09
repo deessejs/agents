@@ -27,6 +27,9 @@ importers:
       '@ds-team/agent-core':
         specifier: workspace:*
         version: link:../../packages/agent-core
+      '@ds-team/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       ai:
         specifier: ^7.0.16
         version: 7.0.16(zod@4.4.3)
