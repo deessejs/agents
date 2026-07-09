@@ -1,5 +1,12 @@
 ---
-description: Triage a GitHub issue on deessejs/errors — fetch, classify against the project taxonomy (type/status/p?/effort), and apply labels plus a Triage Review comment. Load when the user asks to triage, label, classify, or "process" an issue. Mirrors the canonical procedure at deessejs/errors/.claude/skills/triage/SKILL.md.
+description: Triage a GitHub issue on deessejs/errors — fetch, classify
+  against the project taxonomy (type, status, priority, effort), and
+  apply labels plus a Triage Review comment. Use when the user asks to
+  triage, classify, label, or process an issue, or says "what status
+  should #N be". Do NOT use to create new issues (use open-github-issue),
+  to post free-form comments (phase 4-5), or to edit or close the issue.
+  Always preview the label diff and the Triage Review comment before
+  applying; both writes hit a connection-level user-approval gate.
 ---
 
 # Triage an issue on `deessejs/errors`
@@ -9,6 +16,18 @@ This skill mirrors the canonical triage procedure shipped at
 The taxonomy, decision tree, label-handling rules, and comment templates
 here are the **contract**. Changes here should be made in lockstep with
 the canonical source.
+
+Copy this checklist and check off each step as you complete it:
+
+Triage Progress:
+- [ ] Step 1: Resolve the target (single issue or batch in `status: triage`)
+- [ ] Step 2: Fetch per-issue detail with `github__issue_read`
+- [ ] Step 3: Apply the decision tree (complete → valid → blocked)
+- [ ] Step 4: Compute `add = candidates \ existing`; never remove
+- [ ] Step 5: Compose the matching Triage Review comment
+- [ ] Step 6: Preview the label diff + comment, wait for explicit OK
+- [ ] Step 7: Apply `github__update_issue_labels` then `github__add_issue_comment` (both gated)
+- [ ] Step 8: Return the issue URL
 
 ## Required tools
 
@@ -28,10 +47,12 @@ Write (all three are gated by `user-approval` at the connection layer; Telegram 
 
 ### From the canonical SKILL.md (do not violate)
 
-1. **Always check existing labels before adding new ones.** Compute `add = candidates \ existing`.
-2. **Add missing labels only — never remove.** A wrong user-added label is preserved.
-3. **Preserve user intent.** User-added labels stay even if they look wrong.
-4. **Respect existing status.** If the issue already has `status: ready`, never downgrade.
+Each rule ships with a *why* so the model can reason from intent, not just pattern-match.
+
+1. **Always check existing labels before adding new ones.** Compute `add = candidates \ existing`. Without it the LLM double-applies labels that are already there and the user sees a flaky mutate-with-no-visible-effect.
+2. **Add missing labels only — never remove.** A wrong user-added label is preserved — the taxonomy owner or the issue author often knows context you don't. Trust their hand-picked state; don't undo it silently.
+3. **Preserve user intent.** A label that looks "wrong" may reflect cross-team context, an active incident, or a discussion that just resolved. The author has the full picture; you have one fetch.
+4. **Respect existing status.** A pre-existing `status: ready` means another maintainer already validated this issue for pickup. Demoting it to `status: triage` (or `needs-info`) makes the work disappear from the queue without explanation.
 
 ### Skill-specific
 

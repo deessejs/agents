@@ -1,10 +1,28 @@
 ---
-description: Open a new GitHub issue on deessejs/errors using the project's .github/ISSUE_TEMPLATE/. Load when the user asks to file a bug, request a feature, log an incident, or otherwise land something on the issue tracker.
+description: Open a new GitHub issue on deessejs/errors using the project's
+  .github/ISSUE_TEMPLATE/. Use when the user asks to file, open, or create
+  a new issue: bug reports, feature requests, incidents, docs typos, chore
+  tasks. Mirrors the templates the project ships. Do NOT use this skill to
+  edit, comment on, label, or triage existing issues — those use the
+  'triage' skill, or land in phase 4-5. Always preview before calling
+  github__create_issue.
 ---
 
 # Open a GitHub issue on `deessejs/errors`
 
 Use this procedure exactly. Do not skip the preview.
+
+Copy this checklist and check off each step as you complete it:
+
+Issue Progress:
+- [ ] Step 1: Confirm intent
+- [ ] Step 2: List templates at `.github/ISSUE_TEMPLATE/`
+- [ ] Step 3: Match user intent to a template (or confirm blank)
+- [ ] Step 4: Read the chosen template
+- [ ] Step 5: Gather values from the user
+- [ ] Step 6: Preview the issue and wait for explicit OK
+- [ ] Step 7: Call `github__create_issue` (gated, user-approval)
+- [ ] Step 8: Return the issue URL
 
 ## 1. Confirm intent
 
