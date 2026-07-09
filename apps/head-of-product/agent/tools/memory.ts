@@ -13,12 +13,12 @@ import {
 
 const SCOPE = "product";
 
-function resolvePath(path: string): { tier: string; metadata: Record<string, unknown> } {
-  if (path === "/memories/core.md") return { tier: "core", metadata: {} };
-  if (path === "/memories/conversations.jsonl") return { tier: "recall", metadata: {} };
+function resolvePath(path: string): { tier: string; filename: string } {
+  if (path === "/memories/core.md") return { tier: "core", filename: path };
+  if (path === "/memories/conversations.jsonl") return { tier: "recall", filename: path };
   const dateMatch = /^\/memories\/notes\/(\d{4}-\d{2}-\d{2})\.md$/.exec(path);
-  if (dateMatch) return { tier: "archival", metadata: { date: dateMatch[1] } };
-  return { tier: "core", metadata: { path } };
+  if (dateMatch) return { tier: "archival", filename: path };
+  return { tier: "core", filename: path };
 }
 
 export default defineTool({
@@ -39,13 +39,14 @@ Rules:
     content: z.string().optional(),
     mode: z.enum(["append", "overwrite"]).optional(),
     query: z.string().optional(),
+    filename: z.string().optional(),
     scope: z.enum(["engineering", "product", "shared"]).optional(),
     tier: z.enum(["core", "archival", "episodic", "recall"]).optional(),
     id: z.number().int().optional(),
     limit: z.number().int().min(1).max(50).optional(),
   }),
   async execute(input) {
-    const { command, path, content, mode, query, scope, tier, id, limit } = input;
+    const { command, path, content, mode, query, filename, scope, tier, id, limit } = input;
 
     switch (command) {
       case "view": {
@@ -56,12 +57,12 @@ Rules:
 
       case "create": {
         if (!content) throw new Error("'create' requires 'content'");
-        const resolved = path ? resolvePath(path) : { tier: tier ?? "core", metadata: {} };
+        const resolved = path ? resolvePath(path) : { tier: tier ?? "core", filename: filename ?? null };
         const row = await writeMemory({
           scope: scope ?? SCOPE,
           tier: resolved.tier,
           content,
-          metadata: resolved.metadata,
+          filename: resolved.filename,
         });
         return { id: row.id, message: `Memory created (id: ${row.id})` };
       }
@@ -70,7 +71,7 @@ Rules:
         if (id === undefined || !content || !mode) {
           throw new Error("'update' requires 'id', 'content', and 'mode'");
         }
-        const row = await updateMemory(id, content, mode);
+        const row = await updateMemory(id, content, mode, filename ?? null);
         return { id: row?.id, message: `Memory updated (id: ${row?.id})` };
       }
 
@@ -78,6 +79,7 @@ Rules:
         if (!query) throw new Error("'search' requires 'query'");
         const results = await searchMemories({
           query,
+          filename: filename ?? undefined,
           scopes: scope ? [scope] : undefined,
           tiers: tier ? [tier] : undefined,
           limit: limit ?? 10,

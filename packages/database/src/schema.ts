@@ -21,6 +21,7 @@ export const memories = pgTable(
     scope: text("scope").notNull() as ReturnType<typeof text> & { _brand: Scope },
     tier: text("tier").notNull() as ReturnType<typeof text> & { _brand: Tier },
     content: text("content").notNull(),
+    filename: text("filename"),
     metadata: jsonb("metadata").notNull().default({} as Record<string, unknown>),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -40,6 +41,8 @@ export const memories = pgTable(
     ),
     // Composite filter index
     index("memories_scope_tier_idx").on(table.scope, table.tier),
+    // Filename search (B-tree for exact and prefix match)
+    index("memories_filename_idx").on(table.filename),
     // JSONB metadata search
     index("memories_metadata_gin").using("gin", table.metadata),
     // B-tree on expires_at

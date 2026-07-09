@@ -8,6 +8,7 @@ import { memories } from "./schema.js";
 
 export interface SearchOptions {
   query: string;
+  filename?: string;
   userId?: string;
   scopes?: string[];
   tiers?: string[];
@@ -19,6 +20,7 @@ export interface MemoryRow {
   scope: string;
   tier: string;
   content: string;
+  filename: string | null;
   metadata: Record<string, unknown>;
   createdAt: Date;
 }
@@ -28,12 +30,17 @@ export interface MemoryRow {
 // ---------------------------------------------------------------------------
 
 export async function searchMemories(opts: SearchOptions): Promise<MemoryRow[]> {
-  const { query, userId = "ceo", scopes, tiers, limit = 10 } = opts;
+  const { query, filename, userId = "ceo", scopes, tiers, limit = 10 } = opts;
 
   const conditions: SQL[] = [];
 
   // Keyword search — always applied
   conditions.push(sql`${memories.content} ILIKE ${"%" + query + "%"}`);
+
+  // Filename search
+  if (filename) {
+    conditions.push(sql`${memories.filename} ILIKE ${"%" + filename + "%"}`);
+  }
 
   if (userId) conditions.push(eq(memories.userId, userId));
   if (scopes?.length) conditions.push(inArray(memories.scope, scopes));
@@ -50,6 +57,7 @@ export async function searchMemories(opts: SearchOptions): Promise<MemoryRow[]> 
       scope: memories.scope,
       tier: memories.tier,
       content: memories.content,
+      filename: memories.filename,
       metadata: memories.metadata,
       createdAt: memories.createdAt,
     })
@@ -69,6 +77,7 @@ export interface WriteOptions {
   scope: string;
   tier: string;
   content: string;
+  filename?: string | null;
   metadata?: Record<string, unknown>;
   expiresAt?: Date | null;
   userId?: string;
@@ -81,6 +90,7 @@ export async function writeMemory(input: WriteOptions) {
       scope: input.scope,
       tier: input.tier,
       content: input.content,
+      filename: input.filename ?? null,
       metadata: input.metadata ?? {},
       expiresAt: input.expiresAt ?? null,
       userId: input.userId ?? "ceo",
@@ -98,12 +108,14 @@ export async function updateMemory(
   id: number,
   content: string,
   mode: "append" | "overwrite",
+  filename?: string | null,
 ) {
   if (mode === "append") {
     const [row] = await getDb()
       .update(memories)
       .set({
         content: sql`${memories.content} || ${"\n"} || ${content}`,
+        ...(filename !== undefined ? { filename } : {}),
         updatedAt: sql`now()`,
       })
       .where(eq(memories.id, id))
@@ -112,7 +124,11 @@ export async function updateMemory(
   } else {
     const [row] = await getDb()
       .update(memories)
-      .set({ content, updatedAt: sql`now()` })
+      .set({
+        content,
+        ...(filename !== undefined ? { filename } : {}),
+        updatedAt: sql`now()`,
+      })
       .where(eq(memories.id, id))
       .returning();
     return row;
