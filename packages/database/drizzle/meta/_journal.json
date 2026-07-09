@@ -15,6 +15,13 @@
       "when": 1783523569192,
       "tag": "0001_next_ulik",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783588245195,
+      "tag": "0002_perfect_viper",
+      "breakpoints": true
     }
   ]
 }
