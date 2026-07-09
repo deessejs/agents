@@ -15,7 +15,8 @@
     "generate": "drizzle-kit generate",
     "migrate": "tsx scripts/migrate.ts",
     "studio": "drizzle-kit studio",
-    "check": "drizzle-kit check"
+    "check": "drizzle-kit check",
+    "guardrail": "tsx scripts/check-no-llm-ids.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.0",

@@ -1,0 +1,307 @@
+{
+  "id": "a1b2c3d4-e5f6-4789-9abc-def012345678",
+  "prevId": "2746bb77-4b60-4d9e-97cc-811a3cc075af",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.memories": {
+      "name": "memories",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "topic": {
+          "name": "topic",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tier": {
+          "name": "tier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "visibility": {
+          "name": "visibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'owner'"
+        },
+        "visible_to": {
+          "name": "visible_to",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "filename": {
+          "name": "filename",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ceo'"
+        }
+      },
+      "indexes": {
+        "memories_agent_tier_idx": {
+          "name": "memories_agent_tier_idx",
+          "columns": [
+            { "expression": "agent_id", "isExpression": false, "asc": true, "nulls": "last" },
+            { "expression": "tier", "isExpression": false, "asc": true, "nulls": "last" }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "memories_topic_tier_idx": {
+          "name": "memories_topic_tier_idx",
+          "columns": [
+            { "expression": "topic", "isExpression": false, "asc": true, "nulls": "last" },
+            { "expression": "tier", "isExpression": false, "asc": true, "nulls": "last" }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "memories_visible_to_gin": {
+          "name": "memories_visible_to_gin",
+          "columns": [
+            { "expression": "visible_to", "isExpression": false, "asc": true, "nulls": "last" }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        },
+        "memories_filename_idx": {
+          "name": "memories_filename_idx",
+          "columns": [
+            { "expression": "filename", "isExpression": false, "asc": true, "nulls": "last" }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "memories_metadata_gin": {
+          "name": "memories_metadata_gin",
+          "columns": [
+            { "expression": "metadata", "isExpression": false, "asc": true, "nulls": "last" }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        },
+        "memories_expires_at_idx": {
+          "name": "memories_expires_at_idx",
+          "columns": [
+            { "expression": "expires_at", "isExpression": false, "asc": true, "nulls": "last" }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "memories_created_at_idx": {
+          "name": "memories_created_at_idx",
+          "columns": [
+            { "expression": "created_at", "isExpression": false, "asc": true, "nulls": "last" }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "memories_tier_check": {
+          "name": "memories_tier_check",
+          "value": "\"memories\".\"tier\" IN ('core', 'archival', 'episodic', 'recall')"
+        },
+        "memories_topic_check": {
+          "name": "memories_topic_check",
+          "value": "\"memories\".\"topic\" IN ('engineering', 'product', 'deessejs-errors', 'general')"
+        },
+        "memories_visibility_check": {
+          "name": "memories_visibility_check",
+          "value": "\"memories\".\"visibility\" IN ('owner', 'shared', 'public')"
+        },
+        "memories_visible_to_check": {
+          "name": "memories_visible_to_check",
+          "value": "((\"memories\".\"visibility\" = 'shared' AND \"memories\".\"visible_to\" IS NOT NULL AND array_length(\"memories\".\"visible_to\", 1) > 0)) OR ((\"memories\".\"visibility\" <> 'shared') AND (\"memories\".\"visible_to\" IS NULL))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.memory_audit": {
+      "name": "memory_audit",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "memory_id": {
+          "name": "memory_id",
+          "type": "serial",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_agent_id": {
+          "name": "actor_agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_agent_id": {
+          "name": "target_agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "memory_audit_memory_idx": {
+          "name": "memory_audit_memory_idx",
+          "columns": [
+            { "expression": "memory_id", "isExpression": false, "asc": true, "nulls": "last" }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "memory_audit_actor_idx": {
+          "name": "memory_audit_actor_idx",
+          "columns": [
+            { "expression": "actor_agent_id", "isExpression": false, "asc": true, "nulls": "last" }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "memory_audit_created_at_idx": {
+          "name": "memory_audit_created_at_idx",
+          "columns": [
+            { "expression": "created_at", "isExpression": false, "asc": true, "nulls": "last" }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "memory_audit_memory_id_memorys_id_fk": {
+          "name": "memory_audit_memory_id_memorys_id_fk",
+          "tableFrom": "memory_audit",
+          "tableTo": "memories",
+          "columnsFrom": ["memory_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "memory_audit_action_check": {
+          "name": "memory_audit_action_check",
+          "value": "\"memory_audit\".\"action\" IN ('forget', 'share', 'unshare', 'update')"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
