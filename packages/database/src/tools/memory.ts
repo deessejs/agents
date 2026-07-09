@@ -45,6 +45,7 @@ const KNOWN_AGENT_IDS: readonly KnownAgentId[] = [
   "general-assistant",
   "deessejs-errors-tech-lead",
   "home-automation-assistant",
+  "fitness-coach",
 ] as const;
 
 const knownAgentIdSchema = z.enum(

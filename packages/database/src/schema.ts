@@ -25,7 +25,8 @@ export type KnownAgentId =
   | "head-of-product"
   | "general-assistant"
   | "deessejs-errors-tech-lead"
-  | "home-automation-assistant";
+  | "home-automation-assistant"
+  | "fitness-coach";
 export type AgentId = KnownAgentId;
 export type AuditAction = "forget" | "share" | "unshare" | "update";
 
@@ -35,6 +36,7 @@ export const KNOWN_AGENT_IDS: readonly KnownAgentId[] = [
   "general-assistant",
   "deessejs-errors-tech-lead",
   "home-automation-assistant",
+  "fitness-coach",
 ] as const;
 
 export const TOPIC_VALUES = [
