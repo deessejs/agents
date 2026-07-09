@@ -10,6 +10,9 @@ export function getDb() {
   if (!_db) {
     const url = process.env.DATABASE_URL;
     if (!url) throw new Error("DATABASE_URL is not set");
+    if (!url.startsWith("postgresql://")) {
+      throw new Error(`DATABASE_URL is not a valid Postgres URL: ${url.slice(0, 50)}`);
+    }
     _db = drizzle({ client: neon(url), schema });
   }
   return _db;

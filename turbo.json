@@ -2,12 +2,14 @@
   "$schema": "https://turborepo.com/schema.json",
   "globalDependencies": ["**/.env.*local", ".env"],
   "globalEnv": [
-    "GITHUB_TOKEN",
+    "DATABASE_URL",
     "EXA_API_KEY",
+    "GITHUB_TOKEN",
+    "GROQ_API_KEY",
     "MINIMAX_API_KEY",
     "TELEGRAM_BOT_TOKEN",
-    "TELEGRAM_WEBHOOK_SECRET_TOKEN",
-    "TELEGRAM_BOT_USERNAME"
+    "TELEGRAM_BOT_USERNAME",
+    "TELEGRAM_WEBHOOK_SECRET_TOKEN"
   ],
   "tasks": {
     "build": {
