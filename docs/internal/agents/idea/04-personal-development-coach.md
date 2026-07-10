@@ -69,6 +69,6 @@ beats "make time for deep work".
 
 ## References
 
-- Complementary agents: [fitness-coach](fitness-coach.md),
-  [finance-expert](finance-expert.md),
-  [nutrition-coach](nutrition-coach.md)
+- Complementary agents: [fitness-coach](../deployed/02-fitness-coach.md),
+  [finance-expert](02-finance-expert.md),
+  [nutrition-coach](03-nutrition-coach.md)

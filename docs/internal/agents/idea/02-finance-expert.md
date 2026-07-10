@@ -74,5 +74,5 @@ hedging's sake; the user is an adult.
 
 ## References
 
-- Complementary agents: [personal-development-coach](personal-development-coach.md),
-  [fitness-coach](fitness-coach.md)
+- Complementary agents: [personal-development-coach](04-personal-development-coach.md),
+  [fitness-coach](../deployed/02-fitness-coach.md)

@@ -52,4 +52,4 @@ _None._
 
 - Residence: `apps/head-of-engineering/`
 - Identity doc: `apps/head-of-engineering/agent/instructions.md`
-- Pair agent: [head-of-product.md](head-of-product.md)
+- Pair agent: [head-of-product](05-head-of-product.md)

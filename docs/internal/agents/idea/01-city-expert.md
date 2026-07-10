@@ -82,7 +82,7 @@ under €1.5k), says so before they waste a week.
 
 ## References
 
-- Complementary agents: [personal-development-coach](personal-development-coach.md),
-  [fitness-coach](fitness-coach.md),
-  [nutrition-coach](nutrition-coach.md),
-  [home-automation-assistant](home-automation-assistant.md)
+- Complementary agents: [personal-development-coach](04-personal-development-coach.md),
+  [fitness-coach](../deployed/02-fitness-coach.md),
+  [nutrition-coach](03-nutrition-coach.md),
+  [home-automation-assistant](../deployed/06-home-automation-assistant.md)

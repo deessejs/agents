@@ -5,9 +5,9 @@ status: deployed
 owner: ds-team
 created: 2026-07-09
 related_reports:
-  - ../reports/deessejs-errors-tech-lead-design-2026-07-09.md
-  - ../reports/triage-skill-design-2026-07-09.md
-  - ../reports/secureexec-integration-guide-2026-07-09.md
+  - ../../reports/deessejs-errors-tech-lead-design-2026-07-09.md
+  - ../../reports/triage-skill-design-2026-07-09.md
+  - ../../reports/secureexec-integration-guide-2026-07-09.md
 ---
 
 ## Pitch

@@ -70,5 +70,5 @@ protein". Disclaims clearly when a question is medical.
 
 ## References
 
-- Pair agent: [fitness-coach](fitness-coach.md)
-- Complementary: [personal-development-coach](personal-development-coach.md)
+- Pair agent: [fitness-coach](../deployed/02-fitness-coach.md)
+- Complementary: [personal-development-coach](04-personal-development-coach.md)
