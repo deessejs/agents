@@ -1,4 +1,4 @@
-# ds-team
+# DeesseJS Agents
 
 A monorepo of specialized AI agents, each shipped as an independent Vercel project. Every agent plays a "head of" role (engineering, product, fitness, finance, ...) and shares one Postgres database for cross-agent memory. Maintained and used internally by the [deessejs.com](https://deessejs.com) teams.
 
