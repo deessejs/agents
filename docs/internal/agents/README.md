@@ -21,7 +21,11 @@ Live on Vercel and/or reachable from a channel.
 
 Agents under design but not yet scaffolded.
 
-_None yet._
+| Agent | Status | Owner file |
+|---|---|---|
+| personal-development-coach | idea | [agents/personal-development-coach.md](personal-development-coach.md) |
+| finance-expert | idea | [agents/finance-expert.md](finance-expert.md) |
+| nutrition-coach | idea | [agents/nutrition-coach.md](nutrition-coach.md) |
 
 ## Retired
 
