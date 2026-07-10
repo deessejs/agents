@@ -26,6 +26,7 @@ Agents under design but not yet scaffolded.
 | personal-development-coach | idea | [agents/personal-development-coach.md](personal-development-coach.md) |
 | finance-expert | idea | [agents/finance-expert.md](finance-expert.md) |
 | nutrition-coach | idea | [agents/nutrition-coach.md](nutrition-coach.md) |
+| city-expert | idea | [agents/city-expert.md](city-expert.md) |
 
 ## Retired
 
