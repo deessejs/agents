@@ -7,7 +7,8 @@
     "./channel/eve": "./src/channels/eve.ts",
     "./channel/telegram": "./src/channels/telegram.ts",
     "./connection/exa": "./src/connections/exa.ts",
-    "./connection/github": "./src/connections/github.ts"
+    "./connection/github": "./src/connections/github.ts",
+    "./instructions/time": "./src/instructions/time.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
