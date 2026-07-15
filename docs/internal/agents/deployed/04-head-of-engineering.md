@@ -36,7 +36,9 @@ Out:
 - [x] GitHub MCP connection (read + write surfaces, hitl-gated)
 - [x] Exa MCP connection (web search)
 - [x] Long-term memory (`@ds-team/database`, agentId baked via factory)
+- [x] Memory guidance baked into the system prompt (tiers, defaults, RGPD caveat)
 - [x] Core memory auto-injection at `session.started`
+- [x] Time-awareness block refreshed on every `turn.started` (+ `current_time` tool fallback)
 - [x] Remote subagent `product` (Head of Product, Vercel OIDC)
 
 ## Voice
