@@ -1,0 +1,89 @@
+[
+  {
+    "number": 101,
+    "title": "Bug in ad-hoc HTTP client",
+    "body": "Steps to reproduce...",
+    "state": "open",
+    "state_reason": null,
+    "user": {
+      "login": "octocat",
+      "id": 1,
+      "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+      "html_url": "https://github.com/octocat",
+      "type": "User"
+    },
+    "labels": [
+      {
+        "id": 8,
+        "name": "bug",
+        "color": "d73a4a",
+        "description": "Something isn't working",
+        "default": true
+      }
+    ],
+    "assignees": [
+      {
+        "login": "monalisa",
+        "id": 2,
+        "avatar_url": "https://avatars.githubusercontent.com/u/2?v=4",
+        "html_url": "https://github.com/monalisa",
+        "type": "User"
+      }
+    ],
+    "comments": 5,
+    "created_at": "2026-10-04T10:00:00Z",
+    "updated_at": "2026-10-04T10:30:00Z",
+    "closed_at": null,
+    "html_url": "https://github.com/octocat/agents/issues/101"
+  },
+  {
+    "number": 102,
+    "title": "Feature request: batch imports",
+    "body": null,
+    "state": "closed",
+    "state_reason": "completed",
+    "user": {
+      "login": "hubot",
+      "id": 3,
+      "avatar_url": "https://avatars.githubusercontent.com/u/3?v=4",
+      "html_url": "https://github.com/hubot",
+      "type": "User"
+    },
+    "labels": [],
+    "assignees": [],
+    "comments": 2,
+    "created_at": "2026-09-01T10:00:00Z",
+    "updated_at": "2026-09-15T10:00:00Z",
+    "closed_at": "2026-09-15T10:00:00Z",
+    "html_url": "https://github.com/octocat/agents/issues/102"
+  },
+  {
+    "number": 99,
+    "title": "Duplicate of #101 — ignoring",
+    "body": "Duplicate of the bug.",
+    "state": "closed",
+    "state_reason": "not_planned",
+    "user": {
+      "login": "octocat",
+      "id": 1,
+      "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+      "html_url": "https://github.com/octocat",
+      "type": "User"
+    },
+    "labels": [
+      {
+        "id": 9,
+        "name": "duplicate",
+        "color": "cfd3d7",
+        "description": null,
+        "default": false
+      }
+    ],
+    "assignees": [],
+    "comments": 0,
+    "created_at": "2026-08-01T10:00:00Z",
+    "updated_at": "2026-08-02T10:00:00Z",
+    "closed_at": "2026-08-02T10:00:00Z",
+    "html_url": "https://github.com/octocat/agents/issues/99"
+  }
+]

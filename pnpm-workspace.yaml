@@ -3,6 +3,10 @@ packages:
   - "packages/*"
   - "tools/*"
 
+allowBuilds:
+  esbuild: true
+  protobufjs: true
+
 # Centralized version catalog — keeps deps aligned across all workspaces.
 # Reference these versions from package.json with "catalog:".
 # Add a new dep here once it's used by 2+ workspaces; remove when no consumers.
@@ -11,13 +15,37 @@ catalog:
   turbo: ^2.3.0
   typescript: ^5.6.0
   "@changesets/cli": ^2.27.0
+  vitest: ^2.1.0
+  "@types/node": ^22.0.0
 
   # OXC toolchain (replaces ESLint + Prettier)
   oxlint: ^1.0.0
   oxfmt: ^0.71.0
 
-  # eve + AI SDK (added for v0 packages in Phase 1)
-  eve: ^0.1.0
-  ai: ^4.0.0
-  "@ai-sdk/anthropic": ^1.0.0
-  zod: ^3.23.0
+  # AI SDK stack (verified Oct 2026, all converge on @ai-sdk/provider@4.0.21)
+  ai: 7.0.127
+  "@ai-sdk/anthropic": 4.0.71
+  "@ai-sdk/minimax": 3.0.48
+  "@ai-sdk/provider-utils": 5.0.53
+  gpt-tokenizer: ^2.5.0
+  zod: ^4.1.8
+
+  # Observability
+  pino: ^9.5.0
+  pino-pretty: ^11.3.0
+  "@opentelemetry/api": ^1.9.0
+  "@opentelemetry/sdk-node": ^0.222.0
+  "@opentelemetry/exporter-trace-otlp-http": ^0.222.0
+  "@opentelemetry/resources": ^2.0.0
+  "@opentelemetry/semantic-conventions": ^1.27.0
+
+  # GitHub API (verified Oct 2026, all compatible with @octokit/types@^18.0.0)
+  "@octokit/core": 7.0.8
+  "@octokit/plugin-throttling": 11.0.5
+  "@octokit/plugin-paginate-rest": 16.0.0
+  "@octokit/plugin-retry": 8.1.1
+  "@octokit/types": ^18.0.0
+  msw: ^2.6.0
+
+  # Vercel KV (used by env, observability, runtime for state/dedup)
+  "@vercel/kv": ^3.0.0
