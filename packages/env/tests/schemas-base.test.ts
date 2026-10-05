@@ -28,4 +28,10 @@ describe("baseSchema", () => {
     const result = baseSchema.safeParse({ NODE_ENV: "wat", LOG_LEVEL: "info" });
     expect(result.success).toBe(false);
   });
+
+  it("rejects unknown fields (strict mode)", () => {
+    expect(() =>
+      baseSchema.parse({ NODE_ENV: "production", LOG_LEVEL: "info", EXTRA: "x" }),
+    ).toThrow(/Unrecognized/);
+  });
 });

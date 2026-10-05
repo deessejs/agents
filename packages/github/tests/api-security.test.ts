@@ -2,6 +2,7 @@
  * Tests for the security API helpers (Dependabot, Code Scanning, Secret Scanning).
  */
 import { describe, expect, it } from "vitest";
+import { ZodError } from "zod";
 
 import {
   getDependabotAlerts,
@@ -50,6 +51,20 @@ describe("getDependabotAlerts", () => {
     const { octokit } = makeFakeOctokit([]);
     const alerts = await getDependabotAlerts(octokit, { org: "octocat" });
     expect(alerts).toEqual([]);
+  });
+
+  // CRITICAL-2 regression: the validator hook inside paginateAll must
+  // surface a malformed row as a `ZodError` — never silently let a bad
+  // row through to the caller. If this test starts failing, the
+  // security helper has regressed to the bypass pattern.
+  it("rejects a malformed row inside the validator hook with a ZodError", async () => {
+    const good = dependabotFixture[0];
+    // Drop a required field to force the schema to reject the second entry.
+    const bad = { ...dependabotFixture[1] };
+    delete (bad as Record<string, unknown>).state;
+    const { octokit } = makeFakeOctokit([good, bad]);
+
+    await expect(getDependabotAlerts(octokit, { org: "octocat" })).rejects.toThrow(ZodError);
   });
 });
 

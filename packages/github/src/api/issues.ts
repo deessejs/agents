@@ -11,6 +11,14 @@ import { paginateAll } from "../pagination.ts";
 import { IssueSchema, type Issue } from "../schemas/issue.ts";
 import { parseTimelineEvent, type TimelineEvent } from "../schemas/timeline-event.ts";
 
+/**
+ * `Issue` carries an optional `pull_request` flag on the parsed object
+ * (kept by `.passthrough()`). We use this intersection type to read it
+ * after `IssueSchema.parse` runs — the schema itself does not declare
+ * the field, so we model it once here instead of inline-casting per call.
+ */
+type IssueWithPrFlag = Issue & { pull_request?: unknown };
+
 export interface GetOpenIssuesOpts {
   org: string;
   repo?: string;
@@ -21,15 +29,11 @@ export interface GetOpenIssuesOpts {
   max?: number;
 }
 
-interface RawIssue {
-  pull_request?: unknown;
-}
-
 /**
  * List currently-open issues.
  */
 export async function getOpenIssues(octokit: Octokit, opts: GetOpenIssuesOpts): Promise<Issue[]> {
-  const rows = await paginateAll<RawIssue>(
+  const rows = await paginateAll<IssueWithPrFlag>(
     octokit,
     opts.repo ? "GET /repos/{owner}/{repo}/issues" : "GET /search/issues",
     opts.repo
@@ -53,12 +57,12 @@ export async function getOpenIssues(octokit: Octokit, opts: GetOpenIssuesOpts): 
           per_page: 100,
         },
     { max: opts.max ?? 1000 },
-    (raw): RawIssue => raw as RawIssue,
+    (raw): IssueWithPrFlag => IssueSchema.parse(raw) as IssueWithPrFlag,
   );
 
   // The search endpoint already filters out PRs, but the repo endpoint
   // includes them — guard both.
-  return rows.filter((r) => r.pull_request === undefined).map((r) => IssueSchema.parse(r));
+  return rows.filter((r) => r.pull_request === undefined);
 }
 
 export interface GetClosedIssuesOpts {
@@ -74,7 +78,7 @@ export async function getClosedIssues(
   octokit: Octokit,
   opts: GetClosedIssuesOpts,
 ): Promise<Issue[]> {
-  const rows = await paginateAll<RawIssue>(
+  const rows = await paginateAll<IssueWithPrFlag>(
     octokit,
     opts.repo ? "GET /repos/{owner}/{repo}/issues" : "GET /search/issues",
     opts.repo
@@ -100,10 +104,10 @@ export async function getClosedIssues(
           per_page: 100,
         },
     { max: opts.max ?? 1000 },
-    (raw): RawIssue => raw as RawIssue,
+    (raw): IssueWithPrFlag => IssueSchema.parse(raw) as IssueWithPrFlag,
   );
 
-  return rows.filter((r) => r.pull_request === undefined).map((r) => IssueSchema.parse(r));
+  return rows.filter((r) => r.pull_request === undefined);
 }
 
 export interface GetIssueTimelineOpts {

@@ -6,14 +6,20 @@
  *
  * The boundary validates every row through a caller-supplied Zod-style
  * validator before returning — so consumers cannot accidentally treat
- * raw `unknown` as their typed entity. Callers that don't need
- * validation can pass `passthrough` (or their own identity function).
+ * raw `unknown` as their typed entity.
+ *
+ * This module is INTERNAL. It is exported so API helpers (`api/*`) can
+ * pass their own validator, but it is not surfaced on the package barrel
+ * (`@workspace/github`) nor any subpath export. The public pagination
+ * surface is `gh.paginateAll(route, params?, opts?)` on the GitHubClient
+ * returned by `createGitHubClient`.
  */
 import type { Octokit } from "@octokit/core";
 import type { OctokitResponse, RequestParameters, Route } from "@octokit/types";
 
 import { ComposedOctokit } from "./octokit.ts";
 
+/** Options for the internal paginator. */
 export interface PaginateAllOptions {
   /** Stop once the accumulated result reaches this length. */
   max?: number;
@@ -26,14 +32,14 @@ export interface PaginateAllOptions {
  * Derived from the composed class via `InstanceType` — no more
  * `as unknown as { paginate: ... }` cast.
  */
-export type OctokitWithPaginate = InstanceType<typeof ComposedOctokit>;
+type OctokitWithPaginate = InstanceType<typeof ComposedOctokit>;
 
 /**
- * Identity validator — returns the input unchanged. Useful for callers
- * that want a `paginateAll` without a Zod boundary, e.g. paginating
- * endpoints where the row schema is built downstream.
+ * Identity validator — returns the input unchanged. Used as the default
+ * for the `validate` arg so consumers who want a raw (untyped) result can
+ * simply omit it.
  */
-export function passthrough<T>(raw: unknown): T {
+function passthrough<T>(raw: unknown): T {
   return raw as T;
 }
 
@@ -47,22 +53,6 @@ export function passthrough<T>(raw: unknown): T {
  *
  * When `opts.max` is set, we stop adding items once we reach the cap and
  * trim any excess pushed by a final oversize page.
- *
- * @example
- * ```ts
- * import { z } from "zod";
- * import { paginateAll } from "@workspace/github/pagination";
- *
- * const PullRequestSchema = z.object({ id: z.number() });
- *
- * const rows = await paginateAll(
- *   octokit,
- *   "GET /repos/{owner}/{repo}/pulls",
- *   { owner: "x", repo: "y" },
- *   { max: 500 },
- *   PullRequestSchema.parse,
- * );
- * ```
  */
 export async function paginateAll<T>(
   octokit: Octokit,

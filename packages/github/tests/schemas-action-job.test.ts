@@ -105,7 +105,9 @@ describe("ActionJobSchema", () => {
   });
 
   it("requires steps to be an array", () => {
-    const data = { ...baseJob, steps: "not-an-array" as unknown as ActionStep[] };
+    // Intentionally malformed — the runtime value is a string, not an
+    // array of steps. The schema must surface this as a `ZodError`.
+    const data: Record<string, unknown> = { ...baseJob, steps: "not-an-array" };
     expect(() => ActionJobSchema.parse(data)).toThrow(ZodError);
   });
 

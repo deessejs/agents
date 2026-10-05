@@ -41,13 +41,16 @@ export const PullRequestSchema = z
     updated_at: IsoDateTimeSchema,
     closed_at: NullableIsoDateTimeSchema,
     merged_at: NullableIsoDateTimeSchema,
-    merge_commit_sha: z.string().nullable(),
-    additions: z.number().int().nullable(),
-    deletions: z.number().int().nullable(),
-    changed_files: z.number().int().nullable(),
-    comments: z.number().int(),
-    review_comments: z.number().int(),
-    commits: z.number().int(),
+    merge_commit_sha: z
+      .string()
+      .regex(/^[0-9a-f]{40}$/, "merge_commit_sha must be a 40-char hex")
+      .nullable(),
+    additions: z.number().int().nonnegative().nullable(),
+    deletions: z.number().int().nonnegative().nullable(),
+    changed_files: z.number().int().nonnegative().nullable(),
+    comments: z.number().int().nonnegative(),
+    review_comments: z.number().int().nonnegative(),
+    commits: z.number().int().nonnegative(),
     html_url: GitHubHtmlUrlSchema,
     labels: z.array(LabelSchema),
   })

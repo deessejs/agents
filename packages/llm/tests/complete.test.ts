@@ -37,7 +37,7 @@ interface GenerateCallOpts {
   timeout?: number;
   maxRetries?: number;
   temperature?: number;
-  experimental_telemetry?: { isEnabled: boolean };
+  telemetry?: { isEnabled?: boolean; functionId?: string; metadata?: Record<string, string> };
   prompt?: string;
   instructions?: unknown;
 }
@@ -90,7 +90,8 @@ describe("complete", () => {
 
     await complete({ prompt: "hi", metadata: { agent: "ta" } }, baseConfig);
     const opts = lastCall();
-    expect(opts.experimental_telemetry?.isEnabled).toBe(true);
+    expect(opts.telemetry?.isEnabled).toBe(true);
+    expect(opts.telemetry?.functionId).toBe("llm.complete");
   });
 
   it("attaches the Anthropic cache breakpoint when promptCaching is enabled", async () => {
@@ -157,7 +158,7 @@ describe("complete", () => {
     expect(mocks.generateText).toHaveBeenCalledTimes(1);
   });
 
-  it("forwards metadata to generateText via experimental_telemetry.metadata", async () => {
+  it("forwards metadata to generateText via telemetry.metadata", async () => {
     mocks.generateText.mockResolvedValueOnce({
       text: "x",
       usage: { inputTokens: 1, outputTokens: 1 },
@@ -167,11 +168,22 @@ describe("complete", () => {
 
     await complete({ prompt: "hi", metadata: { agent: "ta", schedule: "daily" } }, baseConfig);
     const opts = lastCall();
-    const telemetry = opts.experimental_telemetry as
-      | { isEnabled?: boolean; metadata?: Record<string, string> }
-      | undefined;
-    expect(telemetry?.isEnabled).toBe(true);
-    expect(telemetry?.metadata).toEqual({ agent: "ta", schedule: "daily" });
+    expect(opts.telemetry?.isEnabled).toBe(true);
+    expect(opts.telemetry?.functionId).toBe("llm.complete");
+    expect(opts.telemetry?.metadata).toEqual({ agent: "ta", schedule: "daily" });
+  });
+
+  it("honors a custom functionId override", async () => {
+    mocks.generateText.mockResolvedValueOnce({
+      text: "x",
+      usage: { inputTokens: 1, outputTokens: 1 },
+      finishReason: "stop",
+      providerMetadata: undefined,
+    });
+
+    await complete({ prompt: "hi", functionId: "agent.summary" }, baseConfig);
+    const opts = lastCall();
+    expect(opts.telemetry?.functionId).toBe("agent.summary");
   });
 
   it("validates maxTokens at the API boundary and throws on out-of-range", async () => {

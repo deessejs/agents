@@ -45,4 +45,14 @@ describe("resendSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("rejects unknown fields (strict mode)", () => {
+    expect(() =>
+      resendSchema.parse({
+        RESEND_API_KEY: "re_abcdefghijklmnopqrstuv",
+        RESEND_FROM_ADDRESS: "agent@example.com",
+        EXTRA: "x",
+      }),
+    ).toThrow(/Unrecognized/);
+  });
 });

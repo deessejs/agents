@@ -6,17 +6,16 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EndpointDefaults } from "@octokit/types";
-import type { Octokit } from "@octokit/core";
 
 import { __resetSecondaryRetryForTests, defaultThrottleHandlers } from "../src/throttle.ts";
 
 /**
- * Minimal fake Octokit satisfying the `Octokit` shape required by the
- * throttle handlers — they never call any methods on it, but the type
- * requires a value. Use `MockOctokit` (declared below) to avoid
- * `as never` casts in the assertions.
+ * Minimal Octokit surface the throttle handlers need: they only receive
+ * it as a parameter and never invoke methods on it, so an empty
+ * `Pick`-style structural type is sufficient.
  */
-const noopOctokit: Octokit = {} as Octokit;
+type OctokitForThrottle = Parameters<ReturnType<typeof defaultThrottleHandlers>["onRateLimit"]>[2];
+const noopOctokit = {} as OctokitForThrottle;
 
 function fakeOptions(): Required<EndpointDefaults> {
   return {

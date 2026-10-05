@@ -33,6 +33,23 @@ describe("DependabotAlertSchema", () => {
     const data = { ...dependabotFixture[0], severity: null };
     expect(() => DependabotAlertSchema.parse(data)).not.toThrow();
   });
+
+  it("rejects an unknown ecosystem", () => {
+    const data = { ...dependabotFixture[0], ecosystem: "made-up-ecosystem" };
+    expect(() => DependabotAlertSchema.parse(data)).toThrow(ZodError);
+  });
+
+  it("rejects an over-long vulnerable_version_range", () => {
+    const data = {
+      ...dependabotFixture[0],
+      vulnerable_version_range: "<".padEnd(257, "x"),
+    };
+    expect(() => DependabotAlertSchema.parse(data)).toThrow(ZodError);
+  });
+
+  it("rejects an empty payload (all required keys missing)", () => {
+    expect(() => DependabotAlertSchema.parse({})).toThrow(ZodError);
+  });
 });
 
 describe("CodeScanningAlertSchema", () => {
@@ -51,6 +68,10 @@ describe("CodeScanningAlertSchema", () => {
     const data = { ...codeScanningFixture[0], state: "weird" };
     expect(() => CodeScanningAlertSchema.parse(data)).toThrow(ZodError);
   });
+
+  it("rejects an empty payload (all required keys missing)", () => {
+    expect(() => CodeScanningAlertSchema.parse({})).toThrow(ZodError);
+  });
 });
 
 describe("SecretScanningAlertSchema", () => {
@@ -68,5 +89,14 @@ describe("SecretScanningAlertSchema", () => {
   it("accepts null resolution (open alerts)", () => {
     const data = { ...secretScanningFixture[0], resolution: null };
     expect(() => SecretScanningAlertSchema.parse(data)).not.toThrow();
+  });
+
+  it("rejects a secret_type with non-snake-case characters", () => {
+    const data = { ...secretScanningFixture[0], secret_type: "Not_Snake_Case!" };
+    expect(() => SecretScanningAlertSchema.parse(data)).toThrow(ZodError);
+  });
+
+  it("rejects an empty payload (all required keys missing)", () => {
+    expect(() => SecretScanningAlertSchema.parse({})).toThrow(ZodError);
   });
 });

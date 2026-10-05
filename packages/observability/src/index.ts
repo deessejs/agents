@@ -10,7 +10,7 @@
  * `createLogger` itself uses — no double-export, no drift.
  */
 
-export { createLogger } from "./create-logger.ts";
+export { createLogger } from "./logger.ts";
 export type { Logger, LoggerConfig } from "./create-logger.ts";
 
 export { withAgentContext } from "./with-context.ts";

@@ -1,10 +1,18 @@
 import { streamText } from "ai";
-import { withCaching } from "./cache.ts";
-import { validatedNumber, MaxTokensSchema, TemperatureSchema } from "./metadata.ts";
-import { buildResolvers, type MiniMaxModel } from "./resolver.ts";
+import { minimax } from "@ai-sdk/minimax";
+
+import { useSystemCaching } from "./cache.ts";
+import { buildResolvers } from "./resolver.ts";
 import { withFallback } from "./fallback.ts";
-import type { CompletionOpts } from "./types.ts";
-import type { ModelId } from "./models.ts";
+import { MaxTokensSchema, TemperatureSchema, validatedNumber } from "./metadata-internal.ts";
+import type { CompletionOpts, RunConfig } from "./types.ts";
+
+/**
+ * Return type of `minimax(modelId)`. Extracted here (rather than from
+ * the resolver module) so this file does not depend on a private
+ * type defined in a sibling module.
+ */
+type MiniMaxModel = ReturnType<typeof minimax>;
 
 /**
  * Run a single `streamText` call and return its text-only async
@@ -15,22 +23,16 @@ import type { ModelId } from "./models.ts";
  */
 function runStream(
   opts: CompletionOpts,
-  config: {
-    promptCaching: boolean;
-    maxRetries: number;
-    timeoutMs: number;
-  },
+  config: RunConfig,
   model: MiniMaxModel,
   validated: {
     maxTokens: number | undefined;
     temperature: number | undefined;
   },
 ): AsyncIterable<string> {
-  const useCaching =
-    config.promptCaching &&
-    opts.promptCaching !== false &&
-    opts.system !== undefined &&
-    opts.system.length > 0;
+  const cachedInstructions = useSystemCaching(config, opts, opts.system);
+  const plainInstructions =
+    opts.system !== undefined && opts.system.length > 0 ? opts.system : undefined;
 
   return streamText({
     model,
@@ -38,14 +40,19 @@ function runStream(
     temperature: validated.temperature ?? 0.3,
     maxRetries: config.maxRetries,
     timeout: config.timeoutMs,
-    experimental_telemetry: {
+    // AI SDK v7 stabilized `experimental_telemetry` → `telemetry`. The
+    // `functionId` is the v7 way to group spans in the observability
+    // backend; defaulting to `"llm.streamComplete"` keeps every
+    // streaming call under one label unless the caller overrides it.
+    telemetry: {
       isEnabled: true,
+      functionId: opts.functionId ?? "llm.streamComplete",
       ...(opts.metadata !== undefined ? { metadata: { ...opts.metadata } } : {}),
     },
-    ...(useCaching
-      ? { instructions: withCaching(opts.system ?? "") }
-      : opts.system !== undefined && opts.system.length > 0
-        ? { instructions: opts.system }
+    ...(cachedInstructions !== undefined
+      ? { instructions: cachedInstructions }
+      : plainInstructions !== undefined
+        ? { instructions: plainInstructions }
         : {}),
     prompt: opts.prompt,
   }).textStream;
@@ -54,19 +61,21 @@ function runStream(
 /**
  * Implementation of {@link LLM.streamComplete}.
  *
- * If the primary model throws a retryable error during stream startup
- * we retry on the next fallback model; mid-stream errors propagate to
- * the caller via the standard `for await` loop.
+ * Fallback semantics:
+ *  - **Startup errors** (anything thrown by `streamText` or
+ *    `buildResolvers`) retry on the next fallback model via the
+ *    {@link withFallback} chain.
+ *  - **Mid-stream errors** (thrown from inside the async iterable
+ *    *after* the first chunk) propagate directly to the caller's
+ *    `for await` loop — by then the consumer is committed to this
+ *    stream, so switching models mid-stream would be confusing.
+ *  - **Empty-stream completion** (provider returns a stream that
+ *    immediately finishes with no chunks) is surfaced as an empty
+ *    iterable, not an error.
  */
 export async function streamComplete(
   opts: CompletionOpts,
-  config: {
-    primary: ModelId;
-    fallbackModels: ReadonlyArray<ModelId>;
-    promptCaching: boolean;
-    maxRetries: number;
-    timeoutMs: number;
-  },
+  config: RunConfig,
 ): Promise<AsyncIterable<string>> {
   const validatedMaxTokens = validatedNumber(MaxTokensSchema, opts.maxTokens, "maxTokens");
   const validatedTemperature = validatedNumber(TemperatureSchema, opts.temperature, "temperature");
@@ -74,8 +83,9 @@ export async function streamComplete(
   const resolvers = buildResolvers(config.primary, config.fallbackModels, opts.model);
   return await withFallback(
     async () => {
+      // `buildResolvers` always returns a non-empty tuple, so the head
+      // is `() => MiniMaxModel` (no `| undefined`).
       const [resolver] = resolvers;
-      if (resolver === undefined) throw new Error("[@workspace/llm] no model configured");
       return runStream(opts, config, resolver(), {
         maxTokens: validatedMaxTokens,
         temperature: validatedTemperature,

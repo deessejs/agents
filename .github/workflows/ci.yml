@@ -49,6 +49,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Warn if TURBO_TOKEN is missing
+        if: ${{ env.TURBO_TOKEN == '' }}
+        run: |
+          echo "::warning::TURBO_TOKEN secret is not set — Turborepo remote cache sharing is disabled. Set TURBO_TEAM and TURBO_TOKEN repo variables / secrets to share cache with your local dev environment and Vercel builds."
+
       - name: Lint + format check
         run: pnpm run check
 

@@ -83,7 +83,7 @@ export interface LoggerConfig {
    * `env.LOG_LEVEL` parsed via `@workspace/env/schemas/base`. Defaults to
    * `"info"` when omitted.
    */
-  level?: LevelName | string;
+  level?: LevelName;
   /**
    * Additional pino redact paths merged on top of {@link DEFAULT_REDACT_PATHS}.
    * Use for header names / env var keys that the defaults miss.

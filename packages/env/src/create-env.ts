@@ -1,4 +1,4 @@
-import type { z, ZodType } from "zod";
+import type { ZodType } from "zod";
 import { toEnvValidationError } from "./error.ts";
 import type { Inferred } from "./types.ts";
 
@@ -20,10 +20,14 @@ import type { Inferred } from "./types.ts";
  * ```
  */
 export function createEnv<T extends ZodType>(schema: T): Inferred<T> {
-  const source = process.env as Record<string, unknown>;
+  // We deliberately widen `process.env` to `Record<string, string | undefined>`
+  // (not `Record<string, unknown>`) so that Zod's `z.string().min(1)` chains
+  // can see the real type and reject empty strings as if the user had set
+  // them to `""` rather than a generic unknown value.
+  const source = process.env as Record<string, string | undefined>;
   const result = schema.safeParse(source);
   if (!result.success) {
     throw toEnvValidationError(result.error);
   }
-  return Object.freeze(result.data) satisfies Readonly<z.infer<T>>;
+  return Object.freeze(result.data);
 }

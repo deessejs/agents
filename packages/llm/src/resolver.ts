@@ -8,17 +8,7 @@ import type { ModelId } from "./models.ts";
  * `@ai-sdk/provider`; we extract it via `ReturnType<typeof …>` so we
  * don't take a hard dependency on `@ai-sdk/provider` for types.
  */
-export type MiniMaxModel = ReturnType<typeof minimax>;
-
-/**
- * Resolve a model id to a `MiniMaxModel` instance.
- *
- * Kept as a separate function so the fallback chain can build its list
- * of resolvers.
- */
-function resolveModel(modelId: ModelId): MiniMaxModel {
-  return minimax(modelId);
-}
+type MiniMaxModel = ReturnType<typeof minimax>;
 
 /**
  * Build the resolver list for `withFallback`.
@@ -28,16 +18,20 @@ function resolveModel(modelId: ModelId): MiniMaxModel {
  * `LLMConfig.fallbackModels`. The returned thunks defer model
  * resolution until the call site so that a fallback model is only
  * instantiated when it's tried.
+ *
+ * Always returns a non-empty tuple — callers can destructure the
+ * first entry as `() => MiniMaxModel` without a `| undefined`
+ * narrowing, eliminating the "no model configured" check.
  */
 export function buildResolvers(
   primary: ModelId,
   fallbackModels: ReadonlyArray<ModelId>,
   perCallOverride: ModelId | undefined,
-): Array<() => MiniMaxModel> {
+): readonly [() => MiniMaxModel, ...Array<() => MiniMaxModel>] {
   const head = perCallOverride ?? primary;
-  const resolvers: Array<() => MiniMaxModel> = [() => resolveModel(head)];
-  for (const id of fallbackModels) {
-    resolvers.push(() => resolveModel(id));
-  }
-  return resolvers;
+  const headResolver = () => minimax(head);
+  const rest: Array<() => MiniMaxModel> = fallbackModels.map((id) => () => minimax(id));
+  // Non-empty tuple: `[headResolver, ...rest]` is structurally typed as
+  // `readonly [() => MiniMaxModel, ...Array<() => MiniMaxModel>]` — no cast.
+  return [headResolver, ...rest];
 }

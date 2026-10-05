@@ -56,9 +56,15 @@ export async function getMergedPRs(
         per_page: 100,
       };
 
-  const rows = await paginateAll<unknown>(octokit, route, baseParams, { max: opts.max ?? 1000 });
+  const rows = await paginateAll<PullRequest>(
+    octokit,
+    route,
+    baseParams,
+    { max: opts.max ?? 1000 },
+    PullRequestSchema.parse,
+  );
 
-  return rows.map((raw) => PullRequestSchema.parse(raw));
+  return rows;
 }
 
 export interface GetOpenPRsOpts {
@@ -94,7 +100,13 @@ export async function getOpenPRs(octokit: Octokit, opts: GetOpenPRsOpts): Promis
         per_page: 100,
       };
 
-  const rows = await paginateAll<unknown>(octokit, route, params, { max: opts.max ?? 1000 });
+  const rows = await paginateAll<PullRequest>(
+    octokit,
+    route,
+    params,
+    { max: opts.max ?? 1000 },
+    PullRequestSchema.parse,
+  );
 
-  return rows.map((raw) => PullRequestSchema.parse(raw));
+  return rows;
 }

@@ -14,7 +14,9 @@ export class EnvValidationError extends Error {
     this.name = "EnvValidationError";
     this.issues = issues;
     // Preserve the V8 stack of the caller where the error was thrown.
-    const ErrorProto = Error as { captureStackTrace?: (target: object, ctor: Function) => void };
+    const ErrorProto = Error as {
+      captureStackTrace?: (target: object, ctor: new (...args: never[]) => unknown) => void;
+    };
     if (typeof ErrorProto.captureStackTrace === "function") {
       ErrorProto.captureStackTrace(this, EnvValidationError);
     }
@@ -75,6 +77,10 @@ function describeMessage(issue: z.ZodIssue): string {
       return "Invalid type";
     case "too_small":
       return "Required";
+    case "too_big":
+      return "Too large";
+    case "not_multiple_of":
+      return "Not a multiple of the divisor";
     case "invalid_format": {
       // `invalid_format` issues always carry a string `format` (e.g.
       // "email", "url", "regex"); the narrowing predicate below proves
@@ -84,12 +90,24 @@ function describeMessage(issue: z.ZodIssue): string {
     }
     case "unrecognized_keys":
       return "Unrecognized keys";
+    case "invalid_union":
+      return "Invalid value";
+    case "invalid_key":
+      return "Invalid key";
+    case "invalid_element":
+      return "Invalid element";
     case "invalid_value":
       return "Invalid value";
     case "custom":
       return "Invalid value";
-    default:
-      return issue.message;
+    default: {
+      // Exhaustiveness check — if Zod ever adds a new `ZodIssue["code"]`
+      // variant, this assignment will fail to compile and force us to
+      // decide how to render it. The cast keeps the runtime path
+      // returning a useful label even when the union drifts.
+      const exhaustive: never = issue;
+      return (exhaustive as { message: string }).message;
+    }
   }
 }
 
@@ -100,10 +118,10 @@ function describeMessage(issue: z.ZodIssue): string {
  * even a 2-character prefix, because a prefix narrows the search space
  * for an attacker. Non-secrets are truncated to 32 chars for readability.
  *
- * Internal: exported only so tests can drive it directly. Not part of
- * the package's public API surface — see `src/index.ts`.
+ * Internal — reachable from tests via direct import on `../src/error.ts`.
+ * Not part of the package's public API surface — see `src/index.ts`.
  */
-export function maskValue(key: string, value: unknown): string {
+function maskValue(key: string, value: unknown): string {
   if (value === undefined) return "undefined";
   if (value === null) return "null";
   if (SECRET_KEYS.has(key)) return "[REDACTED]";
@@ -115,25 +133,34 @@ export function maskValue(key: string, value: unknown): string {
 }
 
 /**
+ * Project a `ZodError` into the public {@link EnvIssue} array shape.
+ *
+ * Centralised so both {@link formatEnvError} (string rendering) and
+ * {@link toEnvValidationError} (wrapped error) stay in lock-step on
+ * how each Zod issue becomes an `EnvIssue`.
+ */
+function buildEnvIssues(error: z.ZodError): EnvIssue[] {
+  return error.issues.map((issue) => {
+    const key = issue.path.length > 0 ? issue.path.join(".") : "(root)";
+    const hint = HINTS[key];
+    const message = describeMessage(issue);
+    return hint !== undefined
+      ? { key, message, hint, received: issue.input }
+      : { key, message, received: issue.input };
+  });
+}
+
+/**
  * Formats a `ZodError` into a readable, actionable error block.
  *
  * The result always ends with a "fail-fast" footer so the message
  * reads as a complete instruction when printed to stderr.
  *
- * Internal: exported only so `create-env.ts` can call it. Not part of
+ * Internal — only {@link toEnvValidationError} calls this. Not part of
  * the package's public API surface — see `src/index.ts`.
  */
-export function formatEnvError(error: z.ZodError): string {
-  const issues: EnvIssue[] = error.issues.map((issue) => {
-    const key = issue.path.length > 0 ? issue.path.join(".") : "(root)";
-    const hint = HINTS[key];
-    const entry: EnvIssue =
-      hint !== undefined
-        ? { key, message: describeMessage(issue), hint, received: issue.input }
-        : { key, message: describeMessage(issue), received: issue.input };
-    return entry;
-  });
-
+function formatEnvError(error: z.ZodError): string {
+  const issues = buildEnvIssues(error);
   const header = `[agent-env] Environment validation failed (${issues.length} error${issues.length === 1 ? "" : "s"}):`;
   const blocks: string[] = [header, ""];
 
@@ -156,17 +183,10 @@ export function formatEnvError(error: z.ZodError): string {
  * Wraps a `ZodError` in an {@link EnvValidationError} whose message is
  * the formatted output of {@link formatEnvError}.
  *
- * Internal: exported only so `create-env.ts` can call it. Not part of
- * the package's public API surface — see `src/index.ts`.
+ * Internal: only `create-env.ts` calls this. Not part of the package's
+ * public API surface — see `src/index.ts`.
  */
 export function toEnvValidationError(error: z.ZodError): EnvValidationError {
-  const issues: EnvIssue[] = error.issues.map((issue) => {
-    const key = issue.path.length > 0 ? issue.path.join(".") : "(root)";
-    const entry: EnvIssue =
-      HINTS[key] !== undefined
-        ? { key, message: describeMessage(issue), hint: HINTS[key], received: issue.input }
-        : { key, message: describeMessage(issue), received: issue.input };
-    return entry;
-  });
+  const issues = buildEnvIssues(error);
   return new EnvValidationError(formatEnvError(error), issues);
 }

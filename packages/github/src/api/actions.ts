@@ -38,9 +38,15 @@ export async function getWorkflowRuns(
         per_page: 100,
       };
 
-  const rows = await paginateAll<unknown>(octokit, route, params, { max: opts.max ?? 100 });
+  const rows = await paginateAll<WorkflowRun>(
+    octokit,
+    route,
+    params,
+    { max: opts.max ?? 100 },
+    WorkflowRunSchema.parse,
+  );
 
-  return rows.map((r) => WorkflowRunSchema.parse(r));
+  return rows;
 }
 
 export interface GetFailedRunsOpts {

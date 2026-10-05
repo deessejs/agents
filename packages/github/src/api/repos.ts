@@ -25,8 +25,9 @@ export async function getOrgRepos(octokit: Octokit, opts: GetOrgReposOpts): Prom
     "GET /orgs/{org}/repos",
     { org: opts.org, per_page: 100, type: opts.type ?? "all" },
     paginationOpts,
+    RepoSchema.parse,
   );
-  return rows.map((r) => RepoSchema.parse(r));
+  return rows;
 }
 
 export async function getRepo(

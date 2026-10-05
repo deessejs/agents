@@ -60,6 +60,6 @@ export function makeCapturingLogger(config: LoggerConfig): {
     stream,
   );
   const logger = wrapPino(pinoInstance);
-  const records = (): unknown[] => stream.chunks.map((line) => JSON.parse(line) as unknown);
+  const records = (): unknown[] => stream.chunks.map((line) => JSON.parse(line));
   return { logger, records, stream };
 }

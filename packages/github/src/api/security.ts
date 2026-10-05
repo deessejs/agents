@@ -11,7 +11,6 @@
  * the parsed objects.
  */
 import type { Octokit } from "@octokit/core";
-import { z } from "zod";
 
 import { paginateAll } from "../pagination.ts";
 import { DependabotAlertSchema, type DependabotAlert } from "../schemas/dependabot-alert.ts";
@@ -119,5 +118,3 @@ export async function getSecretScanningAlerts(
 
 // Re-export the schemas for callers that want to validate raw payloads.
 export { DependabotAlertSchema, CodeScanningAlertSchema, SecretScanningAlertSchema };
-// Re-export z so consumers can build their own filter predicates.
-export { z };

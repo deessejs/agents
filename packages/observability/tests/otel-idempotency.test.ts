@@ -72,4 +72,39 @@ describe("OpenTelemetry idempotency", () => {
     await expect(shutdownOtel()).resolves.toBeUndefined();
     expect(sdkInstances).toHaveLength(0);
   });
+
+  it("two concurrent shutdownOtel() calls both await the same in-flight flush", async () => {
+    setupOtel({ serviceName: "agent-concurrent" });
+    expect(sdkInstances).toHaveLength(1);
+
+    // Make the first shutdown take a measurable amount of time so a
+    // second call clearly races against it.
+    let resolveShutdown: (() => void) | undefined;
+    const shutdownMock = sdkInstances[0]?.shutdown;
+    if (shutdownMock) {
+      shutdownMock.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveShutdown = () => resolve();
+          }),
+      );
+    }
+
+    const first = shutdownOtel();
+    const second = shutdownOtel();
+
+    // While the first shutdown is in flight, no new SDK should be
+    // instantiated and the second shutdown should be awaiting the
+    // same promise.
+    expect(sdkInstances).toHaveLength(1);
+    expect(shutdownMock).toHaveBeenCalledTimes(1);
+
+    resolveShutdown?.();
+    await Promise.all([first, second]);
+
+    // After both awaited the same in-flight shutdown, the SDK count
+    // remains 1 (we never re-created).
+    expect(sdkInstances).toHaveLength(1);
+    expect(shutdownMock).toHaveBeenCalledTimes(1);
+  });
 });

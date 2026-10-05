@@ -29,6 +29,6 @@ export {
   type ActionJob,
   type ActionStep,
 } from "./action-job.ts";
-export { GitHubAvatarUrlSchema, GitHubHtmlUrlSchema, GitHubUrlSchema } from "./url.ts";
+export { GitHubAvatarUrlSchema, GitHubHtmlUrlSchema, GitHubRestUrlSchema } from "./url.ts";
 export { IsoDateTimeSchema, NullableIsoDateTimeSchema } from "./datetime.ts";
 export { RateLimitResponseSchema, type RateLimitResponse } from "./rate-limit.ts";

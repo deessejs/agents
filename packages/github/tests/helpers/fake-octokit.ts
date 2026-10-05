@@ -25,12 +25,22 @@ export interface MockOctokitResponse<T = unknown> {
 }
 
 /**
+ * Narrow Octokit shape our API helpers consume. We only call
+ * `octokit.request(...)` and `octokit.paginate.iterator(...)`, so a
+ * `Pick`-style structural type keeps the fake close to the real type
+ * without dragging in the rest of Octokit's plugin surface.
+ */
+export type FakeOctokitShape = Pick<Octokit, "request"> & {
+  paginate: { iterator: Octokit["paginate"]["iterator"] };
+};
+
+/**
  * What every fake Octokit test helper returns. Each property is a `vi.fn`
  * so tests can assert calls with the standard Vitest API.
  */
 export interface FakeOctokit {
   /** The minimal Octokit-shaped object our API helpers consume. */
-  octokit: Octokit;
+  octokit: FakeOctokitShape;
   /** Records every `request(route, params)` invocation. */
   requestSpy: Mock<
     (route: Route | URL, params?: RequestParameters) => Promise<OctokitResponse<unknown>>
@@ -75,7 +85,9 @@ export function mockRequests(
  * of data. `request` and the top-level `paginate` are also exposed as
  * spies so tests can assert on them when needed.
  */
-export function makeFakeOctokit<T = unknown>(pages: ReadonlyArray<T[]> = []): FakeOctokit {
+export function makeFakeOctokit<T = unknown>(
+  pages: ReadonlyArray<ReadonlyArray<T>> = [],
+): FakeOctokit {
   const requestSpy =
     vi.fn<(route: Route | URL, params?: RequestParameters) => Promise<OctokitResponse<unknown>>>();
   const paginateSpy =
@@ -92,16 +104,17 @@ export function makeFakeOctokit<T = unknown>(pages: ReadonlyArray<T[]> = []): Fa
       }
     })(),
   );
-  paginateSpy.mockImplementation(() => Promise.resolve(pages.flat() as unknown[]));
+  paginateSpy.mockImplementation(() => Promise.resolve<readonly unknown[]>(pages.flat()));
 
-  // Cast through `unknown` to the Octokit type — the runtime shape we
-  // provide is intentionally minimal.
-  const octokit = {
+  // Narrow structural shape — we provide exactly the methods the package
+  // uses (`request`, `paginate.iterator`). The runtime shape is
+  // intentionally minimal; no `unknown` chain needed.
+  const octokit: FakeOctokitShape = {
     request: requestSpy,
     paginate: {
       iterator: iteratorSpy,
     },
-  } as unknown as Octokit;
+  };
 
   return { octokit, requestSpy, paginateSpy, iteratorSpy };
 }
@@ -111,6 +124,6 @@ export function makeFakeOctokit<T = unknown>(pages: ReadonlyArray<T[]> = []): Fa
  * the first `paginate.iterator` call. Mirrors the most common test
  * pattern where a single page of results is returned.
  */
-export function makeSinglePageFakeOctokit<T>(page: T[]): FakeOctokit {
+export function makeSinglePageFakeOctokit<T>(page: ReadonlyArray<T>): FakeOctokit {
   return makeFakeOctokit<T>([page]);
 }

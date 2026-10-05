@@ -9,12 +9,12 @@ import pullRequestsFixture from "./fixtures/pull-requests.json";
 
 describe("PullRequestSchema", () => {
   it("parses a fully-populated fixture", () => {
-    const merged = pullRequestsFixture[0] as PullRequest;
+    const merged: PullRequest = pullRequestsFixture[0];
     expect(() => PullRequestSchema.parse(merged)).not.toThrow();
   });
 
   it("accepts nullable fields (body, user, additions)", () => {
-    const draft = pullRequestsFixture[1] as PullRequest;
+    const draft: PullRequest = pullRequestsFixture[1];
     const parsed = PullRequestSchema.parse(draft);
 
     expect(parsed.body).toBeNull();
@@ -28,7 +28,7 @@ describe("PullRequestSchema", () => {
     // uses `.passthrough()` so downstream code can read them via the
     // typed object without a schema bump.
     const data = { ...pullRequestsFixture[0], extra_field: "nope" };
-    const parsed = PullRequestSchema.parse(data) as Record<string, unknown>;
+    const parsed = PullRequestSchema.parse(data);
     expect(parsed.extra_field).toBe("nope");
   });
 
@@ -38,7 +38,7 @@ describe("PullRequestSchema", () => {
   });
 
   it("rejects missing number", () => {
-    const { number, ...rest } = pullRequestsFixture[0] as Record<string, unknown>;
+    const { number, ...rest } = pullRequestsFixture[0];
     void number;
     expect(() => PullRequestSchema.parse(rest)).toThrow(ZodError);
   });
@@ -56,5 +56,28 @@ describe("PullRequestSchema", () => {
       ],
     };
     expect(() => PullRequestSchema.parse(data)).toThrow(/color must be/);
+  });
+
+  it("rejects negative counters (additions, comments, review_comments, commits)", () => {
+    for (const field of [
+      "additions",
+      "deletions",
+      "changed_files",
+      "comments",
+      "review_comments",
+      "commits",
+    ] as const) {
+      const data = { ...pullRequestsFixture[0], [field]: -1 };
+      expect(() => PullRequestSchema.parse(data)).toThrow(ZodError);
+    }
+  });
+
+  it("rejects a non-hex merge_commit_sha", () => {
+    const data = { ...pullRequestsFixture[0], merge_commit_sha: "not-a-sha" };
+    expect(() => PullRequestSchema.parse(data)).toThrow(ZodError);
+  });
+
+  it("rejects an empty payload (all required keys missing)", () => {
+    expect(() => PullRequestSchema.parse({})).toThrow(ZodError);
   });
 });

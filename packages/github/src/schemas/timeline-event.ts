@@ -66,7 +66,11 @@ const UnassignedEventSchema = TimelineEventBase.extend({
 /** `closed` — `commit_id` is optional; present when a closing commit exists. */
 const ClosedEventSchema = TimelineEventBase.extend({
   event: z.literal("closed"),
-  commit_id: z.string().nullable().optional(),
+  commit_id: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/, "commit_id must be a 40-char hex")
+    .nullable()
+    .optional(),
 });
 
 /** `reopened`. */
@@ -78,7 +82,11 @@ const ReopenedEventSchema = TimelineEventBase.extend({
 const CommentedEventSchema = TimelineEventBase.extend({
   event: z.literal("commented"),
   body: z.string().max(65_536).nullable().optional(),
-  commit_id: z.string().nullable().optional(),
+  commit_id: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/, "commit_id must be a 40-char hex")
+    .nullable()
+    .optional(),
 });
 
 /** `renamed` — `from` and `to` carry the title transition. */
@@ -166,38 +174,16 @@ const UnknownTimelineEventSchema = TimelineEventBase.extend({
 }).passthrough();
 
 /**
- * Set of event names we model explicitly. If `event` is one of these,
- * the payload must satisfy the matching branch — falling through to the
- * catch-all is an error.
- */
-const KNOWN_EVENT_NAMES: ReadonlySet<string> = new Set([
-  "labeled",
-  "unlabeled",
-  "assigned",
-  "unassigned",
-  "closed",
-  "reopened",
-  "commented",
-  "renamed",
-  "cross-referenced",
-  "review_requested",
-  "review_request_removed",
-  "review_dismissed",
-  "review_submitted",
-  "locked",
-  "unlocked",
-  "pinned",
-  "unpinned",
-  "marked_as_duplicate",
-  "converted_to_discussion",
-]);
-
-/**
  * Discriminated union over the `event` discriminator for the events we
  * model explicitly. Each branch's discriminator is a string literal, so
  * Zod picks the matching branch in O(1) and surfaces meaningful errors
  * when the branch's other required fields are missing (e.g. `label` on
  * `labeled`).
+ *
+ * NOTE: this MUST stay the last const declared in the file. The
+ * `KNOWN_EVENT_NAMES` set below derives from
+ * `knownTimelineEventSchema.options` so adding a new branch here is the
+ * only edit required to keep the model and the parse-allow-list in sync.
  */
 export const knownTimelineEventSchema = z.discriminatedUnion("event", [
   LabeledEventSchema,
@@ -220,6 +206,21 @@ export const knownTimelineEventSchema = z.discriminatedUnion("event", [
   MarkedAsDuplicateEventSchema,
   ConvertedToDiscussionEventSchema,
 ]);
+
+/**
+ * Set of event names we model explicitly. If `event` is one of these,
+ * the payload must satisfy the matching branch — falling through to the
+ * catch-all is an error.
+ *
+ * Derived from the discriminated union above so adding a new branch
+ * automatically registers its discriminator here (no second list to keep
+ * in sync). We extract the `event` field from each branch via the
+ * `.shape.event.value` access path; `z.literal("foo")` exposes the value
+ * as a `ZodLiteral` whose `.value` is the literal string.
+ */
+const KNOWN_EVENT_NAMES: ReadonlySet<string> = new Set(
+  knownTimelineEventSchema.options.map((option) => option.shape.event.value),
+);
 
 /** Inferred TypeScript type for a known timeline event. */
 export type KnownTimelineEvent = z.infer<typeof knownTimelineEventSchema>;

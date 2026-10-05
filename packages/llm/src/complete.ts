@@ -1,30 +1,26 @@
 import { generateText } from "ai";
-import { withCaching } from "./cache.ts";
-import {
-  readCachedInputTokens,
-  validatedNumber,
-  MaxTokensSchema,
-  TemperatureSchema,
-} from "./metadata.ts";
-import { buildResolvers, type MiniMaxModel } from "./resolver.ts";
+import { minimax } from "@ai-sdk/minimax";
+
+import { useSystemCaching } from "./cache.ts";
+import { readCachedInputTokens } from "./metadata.ts";
+import { buildResolvers } from "./resolver.ts";
 import { withFallback } from "./fallback.ts";
-import type { CompletionOpts, CompletionResult } from "./types.ts";
+import { MaxTokensSchema, TemperatureSchema, validatedNumber } from "./metadata-internal.ts";
+import type { CompletionOpts, CompletionResult, RunConfig } from "./types.ts";
 import type { ModelId } from "./models.ts";
+
+/**
+ * Return type of `minimax(modelId)`. Extracted here (rather than from
+ * the resolver module) so this file does not depend on a private
+ * type defined in a sibling module.
+ */
+type MiniMaxModel = ReturnType<typeof minimax>;
 
 /**
  * Implementation of {@link LLM.complete} that applies our defaults
  * and walks the fallback chain on retryable errors.
  */
-export async function complete(
-  opts: CompletionOpts,
-  config: {
-    primary: ModelId;
-    fallbackModels: ReadonlyArray<ModelId>;
-    promptCaching: boolean;
-    maxRetries: number;
-    timeoutMs: number;
-  },
-): Promise<CompletionResult> {
+export async function complete(opts: CompletionOpts, config: RunConfig): Promise<CompletionResult> {
   const validatedMaxTokens = validatedNumber(MaxTokensSchema, opts.maxTokens, "maxTokens");
   const validatedTemperature = validatedNumber(TemperatureSchema, opts.temperature, "temperature");
 
@@ -33,10 +29,9 @@ export async function complete(
 
   return await withFallback(
     async () => {
+      // `buildResolvers` always returns a non-empty tuple, so the head
+      // is `() => LanguageModelV4` (no `| undefined`).
       const [resolver] = resolvers;
-      if (resolver === undefined) {
-        throw new Error("[@workspace/llm] no model configured");
-      }
       return runComplete(resolver(), opts, config, effectiveModel, {
         maxTokens: validatedMaxTokens,
         temperature: validatedTemperature,
@@ -60,22 +55,16 @@ export async function complete(
 async function runComplete(
   model: MiniMaxModel,
   opts: CompletionOpts,
-  config: {
-    promptCaching: boolean;
-    maxRetries: number;
-    timeoutMs: number;
-  },
+  config: RunConfig,
   effectiveModel: ModelId,
   validated: {
     maxTokens: number | undefined;
     temperature: number | undefined;
   },
 ): Promise<CompletionResult> {
-  const useCaching =
-    config.promptCaching &&
-    opts.promptCaching !== false &&
-    opts.system !== undefined &&
-    opts.system.length > 0;
+  const cachedInstructions = useSystemCaching(config, opts, opts.system);
+  const plainInstructions =
+    opts.system !== undefined && opts.system.length > 0 ? opts.system : undefined;
 
   const result = await generateText({
     model,
@@ -83,14 +72,19 @@ async function runComplete(
     temperature: validated.temperature ?? 0.3,
     maxRetries: config.maxRetries,
     timeout: config.timeoutMs,
-    experimental_telemetry: {
+    // AI SDK v7 stabilized `experimental_telemetry` → `telemetry`. The
+    // `functionId` is the v7 way to group spans in the observability
+    // backend; defaulting to `"llm.complete"` keeps every single-shot
+    // call under one label unless the caller overrides it.
+    telemetry: {
       isEnabled: true,
+      functionId: opts.functionId ?? "llm.complete",
       ...(opts.metadata !== undefined ? { metadata: { ...opts.metadata } } : {}),
     },
-    ...(useCaching
-      ? { instructions: withCaching(opts.system ?? "") }
-      : opts.system !== undefined && opts.system.length > 0
-        ? { instructions: opts.system }
+    ...(cachedInstructions !== undefined
+      ? { instructions: cachedInstructions }
+      : plainInstructions !== undefined
+        ? { instructions: plainInstructions }
         : {}),
     prompt: opts.prompt,
   });

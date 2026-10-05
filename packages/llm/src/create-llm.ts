@@ -6,9 +6,10 @@ import { MODELS } from "./models.ts";
 
 /**
  * Default factory values. Centralized so individual methods don't have
- * to repeat them and so tests can snapshot the defaults.
+ * to repeat them and so tests can snapshot the defaults. Module-private
+ * — only {@link createLLM} uses it.
  */
-export const DEFAULT_LLM_CONFIG = {
+const DEFAULT_LLM_CONFIG = {
   primary: MODELS.PRIMARY,
   fallbackModels: [] as ReadonlyArray<typeof MODELS.PRIMARY>,
   promptCaching: true,

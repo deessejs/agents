@@ -29,8 +29,8 @@ Internal workspace package — add to `dependencies`:
 
 ```ts
 import { createGitHubClient } from "@workspace/github";
-import { getMergedPRs, getOpenIssues } from "@workspace/github/api/pulls";
-import { getMergedPRs as getMergedPRsIssues } from "@workspace/github/api/issues";
+import { getMergedPRs, getOpenPRs } from "@workspace/github/api/pulls";
+import { getOpenIssues, getIssueTimeline } from "@workspace/github/api/issues";
 
 const gh = createGitHubClient({ auth: process.env.GITHUB_TOKEN! });
 
@@ -40,6 +40,13 @@ const merged = await getMergedPRs(gh, { org: "octocat", since, max: 500 });
 
 // Repo-scoped open issues.
 const open = await getOpenIssues(gh, { org: "octocat", repo: "agents" });
+
+// Issue timeline (labels, comments, closes).
+const events = await getIssueTimeline(gh, {
+  owner: "octocat",
+  repo: "agents",
+  issue_number: open[0].number,
+});
 
 // Live rate-limit info before launching the next batch.
 const { remaining, reset, limit } = await gh.getRateLimit();
@@ -67,9 +74,13 @@ The returned `GitHubClient` exposes `raw` (the underlying Octokit),
 
 ### `gh.paginateAll<T>(route, params?, opts?): Promise<T[]>`
 
-Walk every page of `route` and return a flat array. Validates each row
-through `paginateAll`'s optional boundary validator — see `paginateAll`
-in `src/pagination.ts` for the optional fifth argument.
+Walk every page of `route` and return a flat array. The 3-arg signature
+is the only public surface — call it as `gh.paginateAll(route)`,
+`gh.paginateAll(route, params)`, or `gh.paginateAll(route, params, { max })`.
+For endpoints covered by the `@workspace/github/api/*` helpers, validation
+is applied inside the helper so callers receive already-typed entities;
+use `gh.paginateAll` directly only when you need to paginate an endpoint
+the helpers do not cover.
 
 ### `gh.getRateLimit(): Promise<RateLimitInfo>`
 
@@ -204,6 +215,14 @@ console.log(parsed.resources.search);
 | `@workspace/github/schemas/workflow-run`          | `./src/schemas/workflow-run.ts`          |
 | `@workspace/github/schemas/user`                  | `./src/schemas/user.ts`                  |
 | `@workspace/github/schemas/ref`                   | `./src/schemas/ref.ts`                   |
+| `@workspace/github/schemas/rate-limit`            | `./src/schemas/rate-limit.ts`            |
+| `@workspace/github/schemas/repo`                  | `./src/schemas/repo.ts`                  |
+| `@workspace/github/schemas/label`                 | `./src/schemas/label.ts`                 |
+| `@workspace/github/schemas/review`                | `./src/schemas/review.ts`                |
+| `@workspace/github/schemas/action-job`            | `./src/schemas/action-job.ts`            |
+| `@workspace/github/schemas/action-step`           | `./src/schemas/action-job.ts`            |
+| `@workspace/github/schemas/datetime`              | `./src/schemas/datetime.ts`              |
+| `@workspace/github/schemas/url`                   | `./src/schemas/url.ts`                   |
 | `@workspace/github/schemas/dependabot-alert`      | `./src/schemas/dependabot-alert.ts`      |
 | `@workspace/github/schemas/code-scanning-alert`   | `./src/schemas/code-scanning-alert.ts`   |
 | `@workspace/github/schemas/secret-scanning-alert` | `./src/schemas/secret-scanning-alert.ts` |
@@ -214,7 +233,6 @@ console.log(parsed.resources.search);
 | `@workspace/github/api/releases`                  | `./src/api/releases.ts`                  |
 | `@workspace/github/api/actions`                   | `./src/api/actions.ts`                   |
 | `@workspace/github/api/stats`                     | `./src/api/stats.ts`                     |
-| `@workspace/github/pagination`                    | `./src/pagination.ts`                    |
 | `@workspace/github/throttle`                      | `./src/throttle.ts`                      |
 
 ## JSDoc imports
@@ -223,7 +241,6 @@ console.log(parsed.resources.search);
 import {
   createGitHubClient,
   defaultThrottleHandlers,
-  paginateAll,
   type GitHubClient,
   type GitHubClientConfig,
   type RateLimitInfo,

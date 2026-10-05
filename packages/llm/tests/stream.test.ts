@@ -38,6 +38,20 @@ afterEach(() => {
 });
 
 describe("streamComplete", () => {
+  it("passes the default llm.streamComplete functionId to streamText telemetry", async () => {
+    mocks.streamText.mockReturnValueOnce({
+      textStream: (async function* () {
+        yield "x";
+      })(),
+    });
+
+    await streamComplete({ prompt: "hi" }, baseConfig);
+    const callArgs = mocks.streamText.mock.calls.at(-1);
+    expect(callArgs).toBeDefined();
+    const telemetry = (callArgs![0] as { telemetry?: { functionId?: string } }).telemetry;
+    expect(telemetry?.functionId).toBe("llm.streamComplete");
+  });
+
   it("yields every chunk returned by the underlying streamText", async () => {
     mocks.streamText.mockReturnValueOnce({
       textStream: (async function* () {

@@ -26,7 +26,23 @@ export interface CompletionOpts {
   /** When false, no Anthropic cache breakpoint is attached. Default: true. */
   promptCaching?: boolean;
 
-  /** Free-form key/value metadata forwarded to the AI SDK for telemetry. */
+  /**
+   * Identifier passed to the AI SDK telemetry hook for grouping spans
+   * in the observability backend. Defaults to `"llm.complete"` /
+   * `"llm.streamComplete"` so the factory wires it for callers.
+   */
+  functionId?: string;
+
+  /**
+   * Free-form key/value metadata forwarded to the AI SDK for telemetry.
+   *
+   * NOTE: constrained to `Record<string, string>` for our wrapper's
+   * own logging convenience, but the AI SDK v7 telemetry
+   * `TelemetryOptions.metadata` actually accepts a wider
+   * `Record<JSONValue>`. We only attach `metadata` to a subset of the
+   * telemetry config — see `complete.ts` / `stream.ts` — so the
+   * narrower type here is safe.
+   */
   metadata?: Record<string, string>;
 }
 
@@ -78,6 +94,20 @@ export interface LLMConfig {
   maxRetries?: number;
   /** Per-call timeout in milliseconds. Default: 30_000. */
   timeoutMs?: number;
+}
+
+/**
+ * The subset of {@link LLMConfig} that `complete` and `streamComplete`
+ * actually pass through to the AI SDK call. Extracted so both call
+ * sites use the same shape and a new tuning knob only has to be
+ * declared once.
+ */
+export interface RunConfig {
+  primary: ModelId;
+  fallbackModels: ReadonlyArray<ModelId>;
+  promptCaching: boolean;
+  maxRetries: number;
+  timeoutMs: number;
 }
 
 /**

@@ -13,13 +13,14 @@ export interface GetReleasesOpts {
 }
 
 export async function getReleases(octokit: Octokit, opts: GetReleasesOpts): Promise<Release[]> {
-  const rows = await paginateAll<unknown>(
+  const rows = await paginateAll<Release>(
     octokit,
     "GET /repos/{owner}/{repo}/releases",
     { owner: opts.owner, repo: opts.repo, per_page: 100 },
     { max: opts.max ?? 100 },
+    ReleaseSchema.parse,
   );
-  return rows.map((r) => ReleaseSchema.parse(r));
+  return rows;
 }
 
 export async function getLatestRelease(

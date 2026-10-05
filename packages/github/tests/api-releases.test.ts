@@ -4,9 +4,10 @@
 import { describe, expect, it } from "vitest";
 
 import { getReleases, getLatestRelease } from "../src/api/releases.ts";
+import { type Release } from "../src/schemas/release.ts";
 import { makeFakeOctokit, mockRequest } from "./helpers/fake-octokit.ts";
 
-const sampleRelease = {
+const sampleRelease: Release = {
   id: 9001,
   tag_name: "v1.2.3",
   name: "Release 1.2.3",
@@ -23,11 +24,11 @@ const sampleRelease = {
     html_url: "https://github.com/octocat",
     type: "User",
   },
-} as const;
+};
 
 describe("getReleases", () => {
   it("returns parsed releases from the repo endpoint", async () => {
-    const { octokit } = makeFakeOctokit([sampleRelease as unknown as Record<string, unknown>]);
+    const { octokit } = makeFakeOctokit([sampleRelease]);
     const releases = await getReleases(octokit, {
       owner: "octocat",
       repo: "agents",
@@ -43,9 +44,7 @@ describe("getReleases", () => {
   });
 
   it("uses the releases endpoint with the expected params", async () => {
-    const { octokit, iteratorSpy } = makeFakeOctokit([
-      sampleRelease as unknown as Record<string, unknown>,
-    ]);
+    const { octokit, iteratorSpy } = makeFakeOctokit([sampleRelease]);
     await getReleases(octokit, { owner: "octocat", repo: "agents" });
     expect(iteratorSpy).toHaveBeenCalledWith(
       "GET /repos/{owner}/{repo}/releases",

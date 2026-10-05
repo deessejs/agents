@@ -10,14 +10,19 @@ import { LEVELS, type LevelName } from "./levels.ts";
 import { createRedactor } from "./redact/index.ts";
 import type { ValuePattern } from "./redact/values.ts";
 import { STANDARD_TAGS } from "./tags.ts";
-import type { GenaiContext, LogFn, Logger, LoggerConfig } from "./types.ts";
+import type { AgentContext, GenaiContext, LogFn, Logger, LoggerConfig } from "./types.ts";
 
 /**
  * Map of AgentContext fields → canonical tag name. Anything in `ctx` that
  * matches a known tag is emitted under that name so downstream queries can
  * filter on `agent.run_id` without knowing about the context shape.
+ *
+ * The key set is derived from `Omit<AgentContext, "genai" | "extra">` so
+ * a new scalar field on `AgentContext` becomes a compile error here,
+ * forcing a routing decision instead of silently landing under
+ * `context.*`.
  */
-const CONTEXT_TO_TAG: Record<string, string> = {
+const CONTEXT_TO_TAG: Record<keyof Omit<AgentContext, "genai" | "extra">, string> = {
   agent: STANDARD_TAGS.AGENT_NAME,
   run_id: STANDARD_TAGS.AGENT_RUN_ID,
   schedule: STANDARD_TAGS.AGENT_SCHEDULE,
@@ -57,22 +62,24 @@ function projectContextTags(): Record<string, unknown> | undefined {
   const ctx = getActiveContext();
   if (!ctx) return undefined;
   const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(ctx)) {
+
+  for (const key of Object.keys(CONTEXT_TO_TAG) as Array<keyof typeof CONTEXT_TO_TAG>) {
+    const value = ctx[key];
     if (value === undefined) continue;
-    if (key === "genai") {
-      projectGenaiTags(value as GenaiContext, out);
-      continue;
-    }
-    if (key === "extra") {
-      for (const [extraKey, extraValue] of Object.entries(value as Record<string, unknown>)) {
-        if (extraValue === undefined) continue;
-        out[tagForUnknownContextField(extraKey)] = extraValue;
-      }
-      continue;
-    }
-    const tag = CONTEXT_TO_TAG[key] ?? tagForUnknownContextField(key);
-    out[tag] = value;
+    out[CONTEXT_TO_TAG[key]] = value;
   }
+
+  if (ctx.genai !== undefined) {
+    projectGenaiTags(ctx.genai, out);
+  }
+
+  if (ctx.extra !== undefined) {
+    for (const [extraKey, extraValue] of Object.entries(ctx.extra)) {
+      if (extraValue === undefined) continue;
+      out[tagForUnknownContextField(extraKey)] = extraValue;
+    }
+  }
+
   return out;
 }
 
@@ -88,9 +95,36 @@ function projectGenaiTags(genai: GenaiContext, out: Record<string, unknown>): vo
   }
 }
 
-export interface PinoLoggerOptions {
-  redactPaths?: string[];
-  redactValuePatterns?: ValuePattern[];
+/**
+ * Build a pino logger pre-configured with redaction, level, and the standard
+ * `agent.name` / `deployment.environment` bindings. Internal helper used by
+ * `createLogger` (and the public `createPinoLogger` shim, when present).
+ */
+function buildPinoLogger(
+  config: LoggerConfig,
+  opts: { redactPaths?: string[]; redactValuePatterns?: ValuePattern[] } = {},
+): PinoLogger {
+  const redactOptions = createRedactor({
+    paths: [...(config.redactPaths ?? []), ...(opts.redactPaths ?? [])],
+    valuePatterns: [...(config.redactValuePatterns ?? []), ...(opts.redactValuePatterns ?? [])],
+  });
+
+  const base: Record<string, unknown> = {
+    [STANDARD_TAGS.AGENT_NAME]: config.agent,
+    service: config.agent,
+  };
+  if (config.env) base[STANDARD_TAGS.DEPLOYMENT_ENV] = config.env;
+
+  return pino({
+    level: resolveLevel(config.level),
+    base,
+    ...redactOptions,
+    // Use the built-in error serializer so Error instances land in a stable
+    // shape with message / stack / type.
+    serializers: {
+      err: pino.stdSerializers.err,
+    },
+  });
 }
 
 /**
@@ -99,7 +133,7 @@ export interface PinoLoggerOptions {
  * are expected to wire their level via `LoggerConfig.level` (typically by
  * passing `env.LOG_LEVEL` parsed through `@workspace/env/schemas/base`).
  */
-function resolveLevel(configLevel?: string): string {
+function resolveLevel(configLevel: LevelName | undefined): string {
   return configLevel ?? "info";
 }
 
@@ -133,40 +167,13 @@ export function wrapPino(pinoInstance: PinoLogger): Logger {
 }
 
 /**
- * Build a pino logger pre-configured with redaction, level, and the standard
- * `agent.name` / `deployment.environment` bindings. Exposed so callers can plug
- * their own logger (e.g. for testing) into the rest of the package.
+ * Public factory for the package's {@link Logger}.
+ *
+ * Used by `createLogger` (the canonical entry point) and by
+ * `withAgentContext` (which builds a child logger with the context
+ * tags already merged).
  */
-export function buildPinoLogger(config: LoggerConfig, opts: PinoLoggerOptions = {}): PinoLogger {
-  const redactOptions = createRedactor({
-    paths: [...(config.redactPaths ?? []), ...(opts.redactPaths ?? [])],
-    valuePatterns: [...(config.redactValuePatterns ?? []), ...(opts.redactValuePatterns ?? [])],
-  });
-
-  const base: Record<string, unknown> = {
-    [STANDARD_TAGS.AGENT_NAME]: config.agent,
-    service: config.agent,
-  };
-  if (config.env) base[STANDARD_TAGS.DEPLOYMENT_ENV] = config.env;
-
-  return pino({
-    level: resolveLevel(config.level),
-    base,
-    ...redactOptions,
-    // Use the built-in error serializer so Error instances land in a stable
-    // shape with message / stack / type.
-    serializers: {
-      err: pino.stdSerializers.err,
-    },
-  });
-}
-
-/**
- * Construct the public {@link Logger} from a {@link LoggerConfig}. Used by
- * `createLogger` and by `withAgentContext` (which builds a child logger with
- * the context tags already merged).
- */
-export function createPinoWrapper(config: LoggerConfig): Logger {
+export function createLogger(config: LoggerConfig): Logger {
   const pinoInstance = buildPinoLogger(config);
   return wrapPino(pinoInstance);
 }

@@ -11,16 +11,19 @@ import { GitHubHtmlUrlSchema } from "./url.ts";
 import { UserSchema } from "./user.ts";
 
 /**
- * Git ref name — anchored so it rejects `..` and most control characters.
- * Git itself accepts a slightly wider range (including `*` for refspecs),
- * but for `default_branch` we want a plain branch name only.
+ * Git ref name — anchored so it rejects `..`, refspec metacharacters
+ * (`~`, `^`, `:`, `?`, `*`, `\`), and most control characters.
+ *
+ * Git itself accepts a slightly wider range (including `*` for refspecs
+ * via `git push`), but for `default_branch` we want a plain branch name
+ * only.
  */
 const BranchNameSchema = z
   .string()
   .min(1)
   .max(255)
-  .regex(/^(?!.*\.\.)[A-Za-z0-9._/-]+$/, {
-    message: "default_branch must be a valid git ref name",
+  .regex(/^(?!.*\.\.)(?!.*[~^:?*\\])[A-Za-z0-9._/-]+$/, {
+    message: "default_branch must be a valid git branch name (no refspec metacharacters)",
   });
 
 export const RepoSchema = z

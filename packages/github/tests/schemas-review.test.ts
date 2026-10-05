@@ -73,4 +73,8 @@ describe("ReviewSchema", () => {
     const data = { ...baseReview, body: "x".repeat(65_537) };
     expect(() => ReviewSchema.parse(data)).toThrow(ZodError);
   });
+
+  it("rejects an empty payload (all required keys missing)", () => {
+    expect(() => ReviewSchema.parse({})).toThrow(ZodError);
+  });
 });

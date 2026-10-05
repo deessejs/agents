@@ -24,18 +24,26 @@ export interface SetupOtelOptions {
 }
 
 /**
- * Module-level state used to enforce idempotency. When `sdk` is non-null we
- * consider the SDK initialized and skip re-creation on subsequent calls.
+ * Module-level state used to enforce idempotency. The `isInitialized`
+ * flag is the single source of truth — `sdk` is treated as a derived
+ * value to avoid the two falling out of sync.
  */
 let sdk: NodeSDK | null = null;
 let isInitialized = false;
+
+/**
+ * In-flight `shutdownOtel()` promise. Set while a shutdown is running
+ * so concurrent callers all await the same flush instead of each
+ * triggering their own.
+ */
+let shutdownInFlight: Promise<void> | null = null;
 
 /**
  * Initialize the OpenTelemetry SDK exactly once. Subsequent calls return
  * without side effects so module-load races and HMR reloads are safe.
  */
 export function setupOtel(opts: SetupOtelOptions = {}): void {
-  if (isInitialized || sdk) return;
+  if (isInitialized) return;
 
   const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: opts.serviceName ?? "agent",
@@ -61,16 +69,37 @@ export function setupOtel(opts: SetupOtelOptions = {}): void {
 }
 
 /**
- * Flush and shut down the SDK. Safe to call when never initialized and safe
- * to call twice in a row — both are no-ops.
+ * Flush and shut down the SDK. Safe to call when never initialized and
+ * safe to call twice in a row — the second call is a no-op while the
+ * first is still flushing, then a no-op again afterward.
+ *
+ * Concurrent callers all await the same in-flight promise, so there is
+ * exactly one `sdk.shutdown()` per cycle.
  */
 export async function shutdownOtel(): Promise<void> {
-  if (!isInitialized || !sdk) return;
+  if (!isInitialized || sdk === null) return;
+  if (shutdownInFlight) return shutdownInFlight;
+
+  // Capture the current SDK, then clear module state BEFORE awaiting
+  // the shutdown so a follow-up `setupOtel()` can proceed without
+  // waiting for the flush to finish.
   const activeSdk = sdk;
-  // Reset state first so concurrent callers see a clean shutdown.
   isInitialized = false;
   sdk = null;
-  await activeSdk.shutdown();
+
+  shutdownInFlight = activeSdk
+    .shutdown()
+    .catch((err: unknown) => {
+      // Swallow shutdown errors but log them — the SDK surface is
+      // "fire and forget" from the caller's perspective, and a flush
+      // failure should never crash the host process.
+      // eslint-disable-next-line no-console
+      console.error("[@workspace/observability] OTel shutdown failed:", err);
+    })
+    .finally(() => {
+      shutdownInFlight = null;
+    });
+  return shutdownInFlight;
 }
 
 /**
@@ -80,4 +109,5 @@ export async function shutdownOtel(): Promise<void> {
 export function __resetOtelForTests(): void {
   isInitialized = false;
   sdk = null;
+  shutdownInFlight = null;
 }

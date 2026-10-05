@@ -4,9 +4,10 @@
 import { describe, expect, it } from "vitest";
 
 import { getOrgRepos, getRepo } from "../src/api/repos.ts";
+import { type Repo } from "../src/schemas/repo.ts";
 import { makeFakeOctokit, mockRequest } from "./helpers/fake-octokit.ts";
 
-const sampleRepo = {
+const sampleRepo: Repo = {
   id: 100,
   name: "agents",
   full_name: "octocat/agents",
@@ -20,11 +21,11 @@ const sampleRepo = {
     html_url: "https://github.com/octocat",
     type: "User",
   },
-} as const;
+};
 
 describe("getOrgRepos", () => {
   it("returns parsed repos from the org endpoint", async () => {
-    const { octokit } = makeFakeOctokit([sampleRepo as unknown as Record<string, unknown>]);
+    const { octokit } = makeFakeOctokit([sampleRepo]);
     const repos = await getOrgRepos(octokit, { org: "octocat" });
     expect(repos).toHaveLength(1);
     expect(repos[0]?.name).toBe("agents");
@@ -42,9 +43,7 @@ describe("getOrgRepos", () => {
     const types = ["all", "public", "private", "forks", "sources", "member"] as const;
     await Promise.all(
       types.map(async (type) => {
-        const { octokit, iteratorSpy } = makeFakeOctokit([
-          sampleRepo as unknown as Record<string, unknown>,
-        ]);
+        const { octokit, iteratorSpy } = makeFakeOctokit([sampleRepo]);
         await getOrgRepos(octokit, { org: "octocat", type });
         expect(iteratorSpy).toHaveBeenCalledWith(
           "GET /orgs/{org}/repos",
@@ -55,9 +54,7 @@ describe("getOrgRepos", () => {
   });
 
   it("defaults the `type` parameter to 'all' when none is supplied", async () => {
-    const { octokit, iteratorSpy } = makeFakeOctokit([
-      sampleRepo as unknown as Record<string, unknown>,
-    ]);
+    const { octokit, iteratorSpy } = makeFakeOctokit([sampleRepo]);
     await getOrgRepos(octokit, { org: "octocat" });
     expect(iteratorSpy).toHaveBeenCalledWith(
       "GET /orgs/{org}/repos",

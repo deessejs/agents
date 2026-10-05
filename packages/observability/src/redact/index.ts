@@ -8,7 +8,7 @@
 import type { LoggerOptions } from "pino";
 
 import { DEFAULT_REDACT_PATHS } from "./paths.ts";
-import { DEFAULT_VALUE_PATTERNS, walk, type ValuePattern } from "./values.ts";
+import { DEFAULT_VALUE_PATTERNS, REDACTED, walk, type ValuePattern } from "./values.ts";
 
 export { DEFAULT_REDACT_PATHS } from "./paths.ts";
 export { DEFAULT_VALUE_PATTERNS, REDACTED, walk, type ValuePattern } from "./values.ts";
@@ -33,7 +33,9 @@ export function createRedactor(
   return {
     redact: {
       paths,
-      censor: "[REDACTED]",
+      // Use the shared `REDACTED` constant so path-based redaction and
+      // value-walker redaction can never drift out of sync.
+      censor: REDACTED,
     },
     formatters: {
       // Pino calls this hook for every log object before serialization.

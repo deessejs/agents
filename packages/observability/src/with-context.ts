@@ -8,8 +8,8 @@
  * OpenTelemetry GenAI spec render correctly out of the box.
  */
 
-import { runInAgentContext, type ContextStoreValue } from "./context-store.ts";
-import { createLogger } from "./create-logger.ts";
+import { runInContext } from "./context-store.ts";
+import { createLogger } from "./logger.ts";
 import type { AgentContext, Logger, LoggerConfig } from "./types.ts";
 
 /**
@@ -50,6 +50,5 @@ export async function withAgentContext<T>(
     ...loggerConfig,
   };
   const logger = createLogger(config);
-  const storeValue: ContextStoreValue = { raw: ctx };
-  return runInAgentContext(storeValue, async () => fn(logger));
+  return runInContext(ctx, async () => fn(logger));
 }

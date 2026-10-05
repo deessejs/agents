@@ -11,7 +11,7 @@ import type { RequestParameters, Route } from "@octokit/types";
 
 import { createOctokit } from "./octokit.ts";
 import { paginateAll as paginateAllImpl } from "./pagination.ts";
-import { getRateLimit as getRateLimitImpl } from "./rate-limit.ts";
+import { RateLimitResponseSchema } from "./schemas/rate-limit.ts";
 
 export interface GitHubClientConfig {
   /** Fine-grained PAT or GitHub App token. */
@@ -54,6 +54,22 @@ export interface GitHubClient {
   ) => Promise<T[]>;
   /** Fetch the current primary rate-limit state. */
   getRateLimit(): Promise<RateLimitInfo>;
+}
+
+/**
+ * Module-private: read the primary rate-limit bucket from
+ * `GET /rate_limit`. The endpoint requires no permissions and is safe
+ * to poll.
+ */
+async function getRateLimitImpl(octokit: Octokit): Promise<RateLimitInfo> {
+  const response = await octokit.request("GET /rate_limit", {});
+  const data = RateLimitResponseSchema.parse(response.data);
+  return {
+    remaining: data.rate.remaining,
+    // `reset` is a unix timestamp (seconds); convert to a `Date`.
+    reset: new Date(data.rate.reset * 1000),
+    limit: data.rate.limit,
+  };
 }
 
 /**

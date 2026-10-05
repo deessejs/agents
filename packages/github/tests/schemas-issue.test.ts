@@ -9,11 +9,12 @@ import issuesFixture from "./fixtures/issues.json";
 
 describe("IssueSchema", () => {
   it("parses the issue fixture", () => {
-    expect(() => IssueSchema.parse(issuesFixture[0] as Issue)).not.toThrow();
+    const data: Issue = issuesFixture[0];
+    expect(() => IssueSchema.parse(data)).not.toThrow();
   });
 
   it("accepts nullable body", () => {
-    const data = { ...issuesFixture[0], body: null } as Issue;
+    const data: Issue = { ...issuesFixture[0], body: null };
     const parsed = IssueSchema.parse(data);
     expect(parsed.body).toBeNull();
   });
@@ -23,7 +24,7 @@ describe("IssueSchema", () => {
     // uses `.passthrough()` so downstream code can read them via the
     // typed object without a schema bump.
     const data = { ...issuesFixture[0], suspicious_field: true };
-    const parsed = IssueSchema.parse(data) as Record<string, unknown>;
+    const parsed = IssueSchema.parse(data);
     expect(parsed.suspicious_field).toBe(true);
   });
 
@@ -33,20 +34,28 @@ describe("IssueSchema", () => {
   });
 
   it("accepts empty assignees", () => {
-    const parsed = IssueSchema.parse(issuesFixture[1] as Issue);
+    const data: Issue = issuesFixture[1];
+    const parsed = IssueSchema.parse(data);
     expect(parsed.assignees).toEqual([]);
   });
 
   it("accepts null state_reason", () => {
-    const parsed = IssueSchema.parse(issuesFixture[0] as Issue);
+    const data: Issue = issuesFixture[0];
+    const parsed = IssueSchema.parse(data);
     expect(parsed.state_reason).toBeNull();
   });
 
   it("accepts valid state_reason enum", () => {
-    const parsed = IssueSchema.parse(issuesFixture[1] as Issue);
-    expect(parsed.state_reason).toBe("completed");
+    const data1: Issue = issuesFixture[1];
+    const parsed1 = IssueSchema.parse(data1);
+    expect(parsed1.state_reason).toBe("completed");
 
-    const parsed2 = IssueSchema.parse(issuesFixture[2] as Issue);
+    const data2: Issue = issuesFixture[2];
+    const parsed2 = IssueSchema.parse(data2);
     expect(parsed2.state_reason).toBe("not_planned");
+  });
+
+  it("rejects an empty payload (all required keys missing)", () => {
+    expect(() => IssueSchema.parse({})).toThrow(ZodError);
   });
 });

@@ -23,7 +23,6 @@
       ]
     },
     "typecheck": {
-      "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "src/**", "tsconfig.json", "package.json"]
     },
     "test": {

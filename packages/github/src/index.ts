@@ -19,4 +19,7 @@ export {
   type SecondaryRateLimitHandler,
 } from "./throttle.ts";
 
-export { paginateAll, type PaginateAllOptions } from "./pagination.ts";
+// Note: `paginateAll` and `PaginateAllOptions` are intentionally NOT
+// re-exported here. They are an internal implementation detail used by
+// the `api/*` helpers. The public pagination surface is
+// `gh.paginateAll(route, params?, opts?)` on the GitHubClient.

@@ -15,13 +15,8 @@ const ANTHROPIC_CACHE_CONTROL = {
  *
  * If the message already carries an `anthropic` provider option, the
  * existing keys are preserved and the cache directive is merged on top.
- *
- * Exported as a named function (rather than overloading `withCaching`)
- * because the consumer needs to operate on a concrete `SystemModelMessage`
- * once it has decided caching is on; the string-to-message wrapping is a
- * convenience helper below.
  */
-export function withCachedSystemMessage(message: SystemModelMessage): SystemModelMessage {
+function withCachedSystemMessage(message: SystemModelMessage): SystemModelMessage {
   const existingOptions = message.providerOptions ?? {};
   const recordExistingAnthropic = existingOptions.anthropic;
   const existingAnthropic =
@@ -71,4 +66,30 @@ export function withCaching(input: Instructions): SystemModelMessage | SystemMod
     };
   }
   return withCachedSystemMessage(input);
+}
+
+/**
+ * Decide whether a system prompt should be wrapped with the Anthropic
+ * cache breakpoint, and return the wrapped form when it should.
+ *
+ * Returns `undefined` when no caching should be applied (either the
+ * caller opted out via `promptCaching: false`, the global config
+ * disabled it, or the system prompt is empty). When caching is on,
+ * returns the `Instructions` value the AI SDK's `instructions` field
+ * expects (a `SystemModelMessage` or array thereof).
+ *
+ * Centralised so `complete.ts` and `stream.ts` stay in lock-step on
+ * the cache-decision logic.
+ */
+export function useSystemCaching(
+  config: { promptCaching: boolean },
+  opts: { promptCaching?: boolean; system?: string },
+  systemValue: string | undefined,
+): Instructions | undefined {
+  const useCaching =
+    config.promptCaching &&
+    opts.promptCaching !== false &&
+    systemValue !== undefined &&
+    systemValue.length > 0;
+  return useCaching && systemValue !== undefined ? withCaching(systemValue) : undefined;
 }

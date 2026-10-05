@@ -13,7 +13,7 @@ interface GenerateCallOpts {
   timeout?: number;
   maxRetries?: number;
   temperature?: number;
-  experimental_telemetry?: { isEnabled: boolean; metadata?: Record<string, string> };
+  telemetry?: { isEnabled?: boolean; functionId?: string; metadata?: Record<string, string> };
 }
 
 // `vi.mock` is hoisted above module imports; the mock objects must

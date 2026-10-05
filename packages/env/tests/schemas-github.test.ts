@@ -46,4 +46,14 @@ describe("githubSchema", () => {
     const result = githubSchema.safeParse({ GITHUB_TOKEN: "ghp_abcdefghijklmnopqrstuvwxyz" });
     expect(result.success).toBe(false);
   });
+
+  it("rejects unknown fields (strict mode)", () => {
+    expect(() =>
+      githubSchema.parse({
+        GITHUB_TOKEN: "ghp_abcdefghijklmnopqrstuvwxyz",
+        GITHUB_ORG: "acme",
+        EXTRA: "x",
+      }),
+    ).toThrow(/Unrecognized/);
+  });
 });

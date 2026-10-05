@@ -28,4 +28,10 @@ describe("vercelSchema", () => {
     const result = vercelSchema.safeParse({ VERCEL_URL: "not a url" });
     expect(result.success).toBe(false);
   });
+
+  it("rejects unknown fields (strict mode)", () => {
+    expect(() => vercelSchema.parse({ VERCEL_URL: "https://x.example.com", EXTRA: "x" })).toThrow(
+      /Unrecognized/,
+    );
+  });
 });

@@ -6,9 +6,10 @@ import type { z, ZodType } from "zod";
  * Each value is `Readonly` so consumers cannot mutate the env object
  * after it has been produced by `createEnv`.
  *
- * Named `Inferred` (rather than `Env`) to avoid colliding with the
- * `@workspace/env` package name when consumers write
- * `import type { Inferred } from "@workspace/env"`.
+ * Named `Inferred` (rather than `Env`) because `Env` would shadow the
+ * `ZodType.env` and other field names inside long type expressions;
+ * `Inferred<typeof schema>` reads better in call sites and stays
+ * unambiguous in editor hovers.
  *
  * @example
  * ```ts

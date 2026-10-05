@@ -51,7 +51,7 @@ export const SecretScanningAlertSchema = z
       "pattern_edited",
       "pattern_deleted",
     ]),
-    secret_type: z.string().min(1).max(100),
+    secret_type: z.string().regex(/^[a-z_]+$/, "secret_type must be snake_case lowercase"),
     secret_type_display_name: z.string().min(1).max(100),
     resolution: SecretResolutionSchema,
     most_recent_instance: SecretInstanceSchema.optional(),
