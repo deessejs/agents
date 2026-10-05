@@ -6,6 +6,7 @@
 import { z } from "zod";
 
 import { IsoDateTimeSchema, NullableIsoDateTimeSchema } from "./datetime.ts";
+import { CommitShaSchema } from "./shared.ts";
 import { GitHubHtmlUrlSchema } from "./url.ts";
 
 /**
@@ -26,7 +27,7 @@ export const WorkflowRunSchema = z
     id: z.number().int().positive(),
     name: z.string().min(1).max(255),
     head_branch: z.string().max(255).nullable(),
-    head_sha: z.string().regex(/^[0-9a-f]{40}$/, "head_sha must be a 40-char hex"),
+    head_sha: CommitShaSchema,
     status: z.enum(["queued", "in_progress", "requested", "waiting", "pending", "completed"]),
     conclusion: z
       .enum([

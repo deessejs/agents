@@ -83,7 +83,7 @@ export function withCaching(input: Instructions): SystemModelMessage | SystemMod
  */
 export function useSystemCaching(
   config: { promptCaching: boolean },
-  opts: { promptCaching?: boolean; system?: string },
+  opts: { promptCaching?: boolean },
   systemValue: string | undefined,
 ): Instructions | undefined {
   const useCaching =
@@ -91,5 +91,5 @@ export function useSystemCaching(
     opts.promptCaching !== false &&
     systemValue !== undefined &&
     systemValue.length > 0;
-  return useCaching && systemValue !== undefined ? withCaching(systemValue) : undefined;
+  return useCaching ? withCaching(systemValue) : undefined;
 }

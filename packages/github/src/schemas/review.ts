@@ -6,6 +6,7 @@
 import { z } from "zod";
 
 import { NullableIsoDateTimeSchema } from "./datetime.ts";
+import { CommitShaSchema } from "./shared.ts";
 import { GitHubHtmlUrlSchema } from "./url.ts";
 import { UserSchema } from "./user.ts";
 
@@ -16,7 +17,7 @@ export const ReviewSchema = z
     body: z.string().max(65_536).nullable(),
     state: z.enum(["APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED", "PENDING"]),
     submitted_at: NullableIsoDateTimeSchema,
-    commit_id: z.string().min(40).max(40),
+    commit_id: CommitShaSchema,
     html_url: GitHubHtmlUrlSchema,
   })
   .passthrough();

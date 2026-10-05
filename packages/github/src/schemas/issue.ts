@@ -23,7 +23,7 @@ export const IssueSchema = z
     user: UserSchema.nullable(),
     labels: z.array(LabelSchema),
     assignees: z.array(UserSchema),
-    comments: z.number().int(),
+    comments: z.number().int().nonnegative(),
     created_at: IsoDateTimeSchema,
     updated_at: IsoDateTimeSchema,
     closed_at: NullableIsoDateTimeSchema,

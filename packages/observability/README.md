@@ -202,4 +202,8 @@ import {
   type LoggerConfig,
   type StandardTagName,
 } from "@workspace/observability";
+
+// Built-in redaction defaults live in the `redact` subpath so they
+// stay out of the package's main entry surface.
+import { DEFAULT_REDACT_PATHS, DEFAULT_VALUE_PATTERNS } from "@workspace/observability/redact";
 ```

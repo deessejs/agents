@@ -11,6 +11,7 @@
 import { z } from "zod";
 
 import { IsoDateTimeSchema, NullableIsoDateTimeSchema } from "./datetime.ts";
+import { CommitShaSchema } from "./shared.ts";
 import { GitHubHtmlUrlSchema } from "./url.ts";
 import { UserSchema } from "./user.ts";
 
@@ -66,11 +67,7 @@ const UnassignedEventSchema = TimelineEventBase.extend({
 /** `closed` — `commit_id` is optional; present when a closing commit exists. */
 const ClosedEventSchema = TimelineEventBase.extend({
   event: z.literal("closed"),
-  commit_id: z
-    .string()
-    .regex(/^[0-9a-f]{40}$/, "commit_id must be a 40-char hex")
-    .nullable()
-    .optional(),
+  commit_id: CommitShaSchema.nullable().optional(),
 });
 
 /** `reopened`. */
@@ -82,11 +79,7 @@ const ReopenedEventSchema = TimelineEventBase.extend({
 const CommentedEventSchema = TimelineEventBase.extend({
   event: z.literal("commented"),
   body: z.string().max(65_536).nullable().optional(),
-  commit_id: z
-    .string()
-    .regex(/^[0-9a-f]{40}$/, "commit_id must be a 40-char hex")
-    .nullable()
-    .optional(),
+  commit_id: CommitShaSchema.nullable().optional(),
 });
 
 /** `renamed` — `from` and `to` carry the title transition. */

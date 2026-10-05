@@ -1,18 +1,10 @@
 import { streamText } from "ai";
-import { minimax } from "@ai-sdk/minimax";
 
 import { useSystemCaching } from "./cache.ts";
-import { buildResolvers } from "./resolver.ts";
+import { buildResolvers, type MiniMaxModel } from "./resolver.ts";
 import { withFallback } from "./fallback.ts";
 import { MaxTokensSchema, TemperatureSchema, validatedNumber } from "./metadata-internal.ts";
 import type { CompletionOpts, RunConfig } from "./types.ts";
-
-/**
- * Return type of `minimax(modelId)`. Extracted here (rather than from
- * the resolver module) so this file does not depend on a private
- * type defined in a sibling module.
- */
-type MiniMaxModel = ReturnType<typeof minimax>;
 
 /**
  * Run a single `streamText` call and return its text-only async

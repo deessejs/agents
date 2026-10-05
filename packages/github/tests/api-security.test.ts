@@ -89,6 +89,19 @@ describe("getCodeScanningAlerts", () => {
     expect(alerts).toHaveLength(1);
     expect(alerts[0]?.state).toBe("open");
   });
+
+  // CRITICAL-2 regression: mirror of the getDependabotAlerts test above.
+  // The validator hook inside paginateAll must surface a malformed row
+  // as a `ZodError` for every security helper — not just Dependabot.
+  it("rejects a malformed row inside the validator hook with a ZodError", async () => {
+    const good = codeScanningFixture[0];
+    // Drop the required `state` enum to force the schema to reject the second entry.
+    const bad = { ...codeScanningFixture[1] };
+    delete (bad as Record<string, unknown>).state;
+    const { octokit } = makeFakeOctokit([good, bad]);
+
+    await expect(getCodeScanningAlerts(octokit, { org: "octocat" })).rejects.toThrow(ZodError);
+  });
 });
 
 describe("getSecretScanningAlerts", () => {
@@ -110,5 +123,17 @@ describe("getSecretScanningAlerts", () => {
     });
     expect(alerts).toHaveLength(1);
     expect(alerts[0]?.state).toBe("resolved");
+  });
+
+  // CRITICAL-2 regression: drop the required `secret_type` field to
+  // verify the validator hook inside paginateAll refuses a malformed
+  // secret-scanning row instead of silently passing it through.
+  it("rejects a malformed row inside the validator hook with a ZodError", async () => {
+    const good = secretScanningFixture[0];
+    const bad = { ...secretScanningFixture[1] };
+    delete (bad as Record<string, unknown>).secret_type;
+    const { octokit } = makeFakeOctokit([good, bad]);
+
+    await expect(getSecretScanningAlerts(octokit, { org: "octocat" })).rejects.toThrow(ZodError);
   });
 });

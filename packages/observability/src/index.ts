@@ -5,13 +5,13 @@
  * own entry points; this index exports the most common helpers for
  * `import { createLogger, withAgentContext } from "@workspace/observability"`.
  *
- * Type re-exports are sourced from `./create-logger.ts` (the canonical
- * public-source entry) so a consumer always sees the same surface that
- * `createLogger` itself uses — no double-export, no drift.
+ * Type re-exports are sourced from `./types.ts` directly so a consumer
+ * always sees the same surface that `createLogger` itself uses — no
+ * shim module, no drift.
  */
 
 export { createLogger } from "./logger.ts";
-export type { Logger, LoggerConfig } from "./create-logger.ts";
+export type { Logger, LoggerConfig } from "./types.ts";
 
 export { withAgentContext } from "./with-context.ts";
 

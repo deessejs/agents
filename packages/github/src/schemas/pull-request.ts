@@ -8,6 +8,7 @@ import { z } from "zod";
 import { IsoDateTimeSchema, NullableIsoDateTimeSchema } from "./datetime.ts";
 import { LabelSchema } from "./label.ts";
 import { RefSchema } from "./ref.ts";
+import { CommitShaSchema } from "./shared.ts";
 import { GitHubHtmlUrlSchema } from "./url.ts";
 import { UserSchema } from "./user.ts";
 
@@ -41,10 +42,7 @@ export const PullRequestSchema = z
     updated_at: IsoDateTimeSchema,
     closed_at: NullableIsoDateTimeSchema,
     merged_at: NullableIsoDateTimeSchema,
-    merge_commit_sha: z
-      .string()
-      .regex(/^[0-9a-f]{40}$/, "merge_commit_sha must be a 40-char hex")
-      .nullable(),
+    merge_commit_sha: CommitShaSchema.nullable(),
     additions: z.number().int().nonnegative().nullable(),
     deletions: z.number().int().nonnegative().nullable(),
     changed_files: z.number().int().nonnegative().nullable(),

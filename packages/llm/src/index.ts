@@ -1,11 +1,10 @@
 /**
  * Public API surface for the `@workspace/llm` package.
  *
- * Consumers should only import from this entry point. Subpath exports
- * (text/stream/object/tokens/types) are part of the design doc; only the
- * main entry is currently wired in `package.json#exports` because the
- * skeleton keeps things minimal. Consumers can still import directly
- * from `./src/...` during development.
+ * Consumers should only import from this entry point. The skeleton keeps
+ * things minimal — only the main entry is currently wired in
+ * `package.json#exports`. Consumers can still import directly from
+ * `./src/...` during development.
  */
 
 export { createLLM } from "./create-llm.ts";

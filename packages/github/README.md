@@ -96,50 +96,59 @@ interface RateLimitInfo {
 
 ## API helpers (subpath imports)
 
+Every helper takes the client as its first argument — the column
+`Helper(octokit, opts)` is shorthand for the full signature
+`(octokit: GitHubClient, opts: Opts) => Promise<…>`.
+
 ### `@workspace/github/api/pulls`
 
-| Helper               | Endpoint                                   | Returns                  |
-| -------------------- | ------------------------------------------ | ------------------------ |
-| `getMergedPRs(opts)` | `GET /search/issues` or `/repos/.../pulls` | `Promise<PullRequest[]>` |
-| `getOpenPRs(opts)`   | same                                       | `Promise<PullRequest[]>` |
+| Helper                        | Endpoint                                   | Returns                  |
+| ----------------------------- | ------------------------------------------ | ------------------------ |
+| `getMergedPRs(octokit, opts)` | `GET /search/issues` or `/repos/.../pulls` | `Promise<PullRequest[]>` |
+| `getOpenPRs(octokit, opts)`   | same                                       | `Promise<PullRequest[]>` |
 
 ### `@workspace/github/api/issues`
 
-| Helper                   | Endpoint                         | Returns                    |
-| ------------------------ | -------------------------------- | -------------------------- |
-| `getOpenIssues(opts)`    | `/repos/.../issues` or search    | `Promise<Issue[]>`         |
-| `getClosedIssues(opts)`  | same                             | `Promise<Issue[]>`         |
-| `getIssueTimeline(opts)` | `/repos/.../issues/{n}/timeline` | `Promise<TimelineEvent[]>` |
+| Helper                            | Endpoint                         | Returns                    |
+| --------------------------------- | -------------------------------- | -------------------------- |
+| `getOpenIssues(octokit, opts)`    | `/repos/.../issues` or search    | `Promise<Issue[]>`         |
+| `getClosedIssues(octokit, opts)`  | same                             | `Promise<Issue[]>`         |
+| `getIssueTimeline(octokit, opts)` | `/repos/.../issues/{n}/timeline` | `Promise<TimelineEvent[]>` |
 
 ### `@workspace/github/api/repos`
 
-| Helper              | Endpoint                | Returns           |
-| ------------------- | ----------------------- | ----------------- |
-| `getOrgRepos(opts)` | `/orgs/{org}/repos`     | `Promise<Repo[]>` |
-| `getRepo(opts)`     | `/repos/{owner}/{repo}` | `Promise<Repo>`   |
+| Helper                       | Endpoint                | Returns           |
+| ---------------------------- | ----------------------- | ----------------- |
+| `getOrgRepos(octokit, opts)` | `/orgs/{org}/repos`     | `Promise<Repo[]>` |
+| `getRepo(octokit, opts)`     | `/repos/{owner}/{repo}` | `Promise<Repo>`   |
 
 ### `@workspace/github/api/security`
 
-| Helper                          | Returns                          |
-| ------------------------------- | -------------------------------- |
-| `getDependabotAlerts(opts)`     | `Promise<DependabotAlert[]>`     |
-| `getCodeScanningAlerts(opts)`   | `Promise<CodeScanningAlert[]>`   |
-| `getSecretScanningAlerts(opts)` | `Promise<SecretScanningAlert[]>` |
+| Helper                                   | Returns                          |
+| ---------------------------------------- | -------------------------------- |
+| `getDependabotAlerts(octokit, opts)`     | `Promise<DependabotAlert[]>`     |
+| `getCodeScanningAlerts(octokit, opts)`   | `Promise<CodeScanningAlert[]>`   |
+| `getSecretScanningAlerts(octokit, opts)` | `Promise<SecretScanningAlert[]>` |
 
 ### `@workspace/github/api/releases`
 
-| Helper                   | Returns              |
-| ------------------------ | -------------------- |
-| `getReleases(opts)`      | `Promise<Release[]>` |
-| `getLatestRelease(opts)` | `Promise<Release>`   |
+| Helper                            | Returns              |
+| --------------------------------- | -------------------- |
+| `getReleases(octokit, opts)`      | `Promise<Release[]>` |
+| `getLatestRelease(octokit, opts)` | `Promise<Release>`   |
 
 ### `@workspace/github/api/actions`
 
-| Helper                    | Returns                                                      |
-| ------------------------- | ------------------------------------------------------------ |
-| `getWorkflowRuns(opts)`   | `Promise<WorkflowRun[]>`                                     |
-| `getFailedRuns(opts)`     | `Promise<WorkflowRun[]>` (filter `conclusion === "failure"`) |
-| `getCommitActivity(opts)` | `Promise<CommitActivity[]>`                                  |
+| Helper                           | Returns                                                      |
+| -------------------------------- | ------------------------------------------------------------ |
+| `getWorkflowRuns(octokit, opts)` | `Promise<WorkflowRun[]>`                                     |
+| `getFailedRuns(octokit, opts)`   | `Promise<WorkflowRun[]>` (filter `conclusion === "failure"`) |
+
+### `@workspace/github/api/stats`
+
+| Helper                             | Returns                     |
+| ---------------------------------- | --------------------------- |
+| `getCommitActivity(octokit, opts)` | `Promise<CommitActivity[]>` |
 
 ## Schemas reference
 
@@ -150,7 +159,7 @@ Every API entity is parsed through a Zod schema exported from
 | --------------------------- | --------------------- | -------------------------------------------------------------- |
 | `PullRequestSchema`         | `PullRequest`         | `mergeable_state` enum (6 values + null)                       |
 | `IssueSchema`               | `Issue`               | `state_reason` enum (`completed` / `reopened` / `not_planned`) |
-| `TimelineSchema`            | `TimelineEvent`       | labeled/assigned/closed/commented/... (discriminated)          |
+| `TimelineEventSchema`       | `TimelineEvent`       | labeled/assigned/closed/commented/... (discriminated)          |
 | `ReleaseSchema`             | `Release`             | `tag_name` 1–255 chars                                         |
 | `WorkflowRunSchema`         | `WorkflowRun`         | `head_sha` 40-char hex; `event` lowercase                      |
 | `DependabotAlertSchema`     | `DependabotAlert`     | `state` 5-value enum                                           |
@@ -177,7 +186,7 @@ parsed object without a schema bump.
 The secondary-retry counter is bounded at 1,000 entries — the oldest
 key is evicted on each insert so a long-lived client can't leak memory.
 For tests, call `__resetSecondaryRetryForTests()` (exported from
-`./throttle`) to forget all state.
+`@workspace/github/throttle`) to forget all state.
 
 ## Rate limit usage
 

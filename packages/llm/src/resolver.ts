@@ -7,8 +7,11 @@ import type { ModelId } from "./models.ts";
  * The provider's callable interface returns a `LanguageModelV4` from
  * `@ai-sdk/provider`; we extract it via `ReturnType<typeof …>` so we
  * don't take a hard dependency on `@ai-sdk/provider` for types.
+ *
+ * Exported so `complete.ts` and `stream.ts` can share the same alias
+ * instead of redeclaring `ReturnType<typeof minimax>` in every module.
  */
-type MiniMaxModel = ReturnType<typeof minimax>;
+export type MiniMaxModel = ReturnType<typeof minimax>;
 
 /**
  * Build the resolver list for `withFallback`.

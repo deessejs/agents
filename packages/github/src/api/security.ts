@@ -14,7 +14,11 @@ import type { Octokit } from "@octokit/core";
 
 import { paginateAll } from "../pagination.ts";
 import { DependabotAlertSchema, type DependabotAlert } from "../schemas/dependabot-alert.ts";
-import { CodeScanningAlertSchema, type CodeScanningAlert } from "../schemas/code-scanning-alert.ts";
+import {
+  CodeScanningAlertSchema,
+  CodeScanningSeveritySchema,
+  type CodeScanningAlert,
+} from "../schemas/code-scanning-alert.ts";
 import {
   SecretScanningAlertSchema,
   type SecretScanningAlert,
@@ -62,7 +66,8 @@ export interface GetCodeScanningAlertsOpts {
   max?: number;
 }
 
-export type CodeScanningSeverity = NonNullable<CodeScanningAlert["severity"]>;
+export type { CodeScanningSeverity } from "../schemas/code-scanning-alert.ts";
+export { CodeScanningSeveritySchema };
 
 export async function getCodeScanningAlerts(
   octokit: Octokit,

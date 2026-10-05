@@ -10,7 +10,7 @@ import { GitHubHtmlUrlSchema } from "./url.ts";
 
 const SecretLocationSchema = z
   .object({
-    path: z.string().optional(),
+    path: z.string().max(4096).optional(),
     start_line: z.number().int().optional(),
     end_line: z.number().int().optional(),
     start_column: z.number().int().optional(),

@@ -98,7 +98,7 @@ function projectGenaiTags(genai: GenaiContext, out: Record<string, unknown>): vo
 /**
  * Build a pino logger pre-configured with redaction, level, and the standard
  * `agent.name` / `deployment.environment` bindings. Internal helper used by
- * `createLogger` (and the public `createPinoLogger` shim, when present).
+ * `createLogger` (the public factory exported from `./index.ts`).
  */
 function buildPinoLogger(
   config: LoggerConfig,

@@ -55,4 +55,26 @@ describe("resendSchema", () => {
       }),
     ).toThrow(/Unrecognized/);
   });
+
+  it("rejects when RESEND_API_KEY is missing", () => {
+    const result = resendSchema.safeParse({
+      RESEND_FROM_ADDRESS: "agent@example.com",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((issue) => issue.path.join("."));
+      expect(paths).toContain("RESEND_API_KEY");
+    }
+  });
+
+  it("rejects when RESEND_FROM_ADDRESS is missing", () => {
+    const result = resendSchema.safeParse({
+      RESEND_API_KEY: "re_abcdefghijklmnopqrstuv",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((issue) => issue.path.join("."));
+      expect(paths).toContain("RESEND_FROM_ADDRESS");
+    }
+  });
 });

@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { vercelSchema } from "../src/schemas/vercel.ts";
 
 describe("vercelSchema", () => {
+  // vercelSchema is entirely optional — every field defaults or accepts
+  // undefined, so there is no "required-field-missing" case to assert.
+  // The empty-payload test below covers the all-optional shape.
+  it.skip("placeholder for required-field-missing (n/a — schema is all-optional)", () => {
+    expect(true).toBe(true);
+  });
+
   it("parses an object that includes Vercel env vars", () => {
     const result = vercelSchema.safeParse({
       VERCEL: "1",

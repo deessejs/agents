@@ -69,6 +69,33 @@ describe("ActionStepSchema", () => {
     expect(parsed.conclusion).toBeNull();
   });
 
+  it("accepts every documented conclusion enum value on a step", () => {
+    // `conclusion` was previously `z.string().max(50).nullable()` —
+    // upgrading to a strict enum means each valid value must round-trip
+    // through the parser; this test pins the nine valid strings.
+    const conclusions = [
+      "success",
+      "failure",
+      "cancelled",
+      "skipped",
+      "timed_out",
+      "action_required",
+      "neutral",
+      "stale",
+      "startup_failure",
+    ] as const;
+    for (const conclusion of conclusions) {
+      const data = { ...baseStep, conclusion };
+      const parsed = ActionStepSchema.parse(data);
+      expect(parsed.conclusion).toBe(conclusion);
+    }
+  });
+
+  it("rejects an unknown step conclusion", () => {
+    const data = { ...baseStep, conclusion: "exploded" };
+    expect(() => ActionStepSchema.parse(data)).toThrow(ZodError);
+  });
+
   it("rejects a negative step number", () => {
     const data = { ...baseStep, number: -2 };
     expect(() => ActionStepSchema.parse(data)).toThrow(ZodError);
@@ -102,6 +129,33 @@ describe("ActionJobSchema", () => {
     const data = { ...baseJob, conclusion: null };
     const parsed = ActionJobSchema.parse(data);
     expect(parsed.conclusion).toBeNull();
+  });
+
+  it("accepts every documented conclusion enum value on a job", () => {
+    // Same coverage as the step-level test, but exercises the schema
+    // re-use path: `ActionJobSchema.conclusion` references the shared
+    // `ActionConclusionSchema` enum.
+    const conclusions = [
+      "success",
+      "failure",
+      "cancelled",
+      "skipped",
+      "timed_out",
+      "action_required",
+      "neutral",
+      "stale",
+      "startup_failure",
+    ] as const;
+    for (const conclusion of conclusions) {
+      const data = { ...baseJob, conclusion };
+      const parsed = ActionJobSchema.parse(data);
+      expect(parsed.conclusion).toBe(conclusion);
+    }
+  });
+
+  it("rejects an unknown job conclusion", () => {
+    const data = { ...baseJob, conclusion: "exploded" };
+    expect(() => ActionJobSchema.parse(data)).toThrow(ZodError);
   });
 
   it("requires steps to be an array", () => {

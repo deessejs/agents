@@ -64,6 +64,19 @@ describe("ReviewSchema", () => {
     expect(() => ReviewSchema.parse(tooLong)).toThrow(ZodError);
   });
 
+  it("rejects non-hex commit_id (uppercase / non-hex characters)", () => {
+    // Length check is necessary but not sufficient — uppercase hex
+    // (e.g. from a stale cache) or 40-char non-hex strings must also
+    // be rejected so callers can safely use the value as a hexdigest.
+    const uppercase = "A".repeat(40);
+    const dataUpper = { ...baseReview, commit_id: uppercase };
+    expect(() => ReviewSchema.parse(dataUpper)).toThrow(ZodError);
+
+    const notHex = "z".repeat(40);
+    const dataNotHex = { ...baseReview, commit_id: notHex };
+    expect(() => ReviewSchema.parse(dataNotHex)).toThrow(ZodError);
+  });
+
   it("rejects a negative id", () => {
     const data = { ...baseReview, id: -1 };
     expect(() => ReviewSchema.parse(data)).toThrow(ZodError);

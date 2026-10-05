@@ -7,6 +7,7 @@
  */
 import { z } from "zod";
 
+import { CommitShaSchema } from "./shared.ts";
 import { RepoSchema } from "./repo.ts";
 import { UserSchema } from "./user.ts";
 
@@ -14,7 +15,7 @@ export const RefSchema = z
   .object({
     label: z.string().min(1).max(255),
     ref: z.string().min(1).max(255),
-    sha: z.string().regex(/^[0-9a-f]{40}$/, "sha must be a 40-char hex git SHA"),
+    sha: CommitShaSchema,
     user: UserSchema.nullable(),
     repo: RepoSchema.optional(),
   })

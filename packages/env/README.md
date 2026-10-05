@@ -58,7 +58,7 @@ try {
 
 Validates `process.env` against `schema`. Throws an
 [`EnvValidationError`](#envvalidationerror) on failure; on success returns
-a frozen, deeply-typed object whose runtime shape matches
+a top-level-frozen, fully-typed object whose runtime shape matches
 `z.infer<typeof schema>`.
 
 ```ts

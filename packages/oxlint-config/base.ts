@@ -61,6 +61,17 @@ export const baseOxlintConfig = {
     // Assignment in conditionals is almost always a bug; promote to error
     // (correctness category already covers this, but pin explicitly).
     "no-cond-assign": "error",
+    // Console output: warn by default (people still call console.log to
+    // debug), but allow console.error so the OTel shutdown path can
+    // surface fatal flush failures. Pin to "warn" rather than "error"
+    // so a stray debug log doesn't fail CI in a security-sensitive code path.
+    "no-console": ["warn", { allow: ["error"] }],
+    // debugger statements are a foot-gun in committed code — they hang the
+    // process if a breakpoint is open in the attached inspector.
+    "no-debugger": "error",
+    // alert/alert/prompt in committed code is almost always a stray debug
+    // artefact. Promote to error.
+    "no-alert": "error",
     // Catches accidental template-string concatenation of `unknown` —
     // relevant for pino/otel log paths.
     "@typescript-eslint/restrict-template-expressions": "error",
@@ -79,6 +90,11 @@ export const baseOxlintConfig = {
         "vitest/require-test-timeout": "off",
         "vitest/require-mock-type-parameters": "off",
         "vitest/no-conditional-expect": "off",
+        // `it.skip` / `describe.skip` is a valid documentation idiom when a
+        // test is intentionally not run (e.g. documenting that a schema is
+        // all-optional so there is no required-field-missing case). Allow
+        // it inside test files; production code paths are still checked.
+        "vitest/no-disabled-tests": "off",
       },
     },
   ],

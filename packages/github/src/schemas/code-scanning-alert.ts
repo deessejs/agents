@@ -8,9 +8,19 @@ import { z } from "zod";
 import { IsoDateTimeSchema, NullableIsoDateTimeSchema } from "./datetime.ts";
 import { GitHubHtmlUrlSchema } from "./url.ts";
 
+/**
+ * Severity union for Code Scanning alerts. Hoisted into a named schema
+ * (rather than the previous `NonNullable<…["severity"]>` derivation)
+ * so callers — including `../api/security.ts` — can derive the matching
+ * TypeScript union without `undefined` leaking in via `.optional()`.
+ */
+export const CodeScanningSeveritySchema = z.enum(["low", "medium", "high", "critical"]);
+/** Inferred TypeScript union of {@link CodeScanningSeveritySchema}. */
+export type CodeScanningSeverity = z.infer<typeof CodeScanningSeveritySchema>;
+
 const AlertLocationSchema = z
   .object({
-    path: z.string(),
+    path: z.string().max(4096),
     start_line: z.number().int().optional(),
     end_line: z.number().int().optional(),
     start_column: z.number().int().optional(),
@@ -22,7 +32,7 @@ const AlertRuleSchema = z
   .object({
     id: z.string().optional(),
     name: z.string().optional(),
-    severity: z.enum(["low", "medium", "high", "critical"]).nullable().optional(),
+    severity: CodeScanningSeveritySchema.nullable().optional(),
   })
   .passthrough();
 
@@ -50,7 +60,7 @@ export const CodeScanningAlertSchema = z
   .object({
     number: z.number().int().positive(),
     state: z.enum(["open", "fixed", "dismissed", "auto_dismissed", "deleted"]),
-    severity: z.enum(["low", "medium", "high", "critical"]).nullable().optional(),
+    severity: CodeScanningSeveritySchema.nullable().optional(),
     rule_id: z.string().nullable().optional(),
     rule: AlertRuleSchema.optional(),
     tool: AlertToolSchema.optional(),
