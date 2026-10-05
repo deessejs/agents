@@ -5,12 +5,23 @@
  * cap lets callers short-circuit large lists.
  */
 import type { Octokit } from "@octokit/core";
-import type { OctokitResponse, Route } from "@octokit/types";
+import type { OctokitResponse, RequestParameters, Route } from "@octokit/types";
+
+import { ComposedOctokit } from "./octokit.ts";
 
 export interface PaginateAllOptions {
   /** Stop once the accumulated result reaches this length. */
   max?: number;
 }
+
+/**
+ * Type alias: an Octokit instance that has the paginate-rest plugin
+ * installed. The `paginate.iterator` method is what `paginateAll` calls.
+ *
+ * Derived from the composed class via `InstanceType` — no more
+ * `as unknown as { paginate: ... }` cast.
+ */
+export type OctokitWithPaginate = InstanceType<typeof ComposedOctokit>;
 
 /**
  * Walk every page of a paginated Octokit endpoint and return a flat array.
@@ -24,22 +35,17 @@ export interface PaginateAllOptions {
 export async function paginateAll<T>(
   octokit: Octokit,
   route: Route,
-  params?: Record<string, unknown>,
+  params?: RequestParameters,
   opts?: PaginateAllOptions,
 ): Promise<T[]> {
   const results: T[] = [];
-  // `composePaginateRest` is heavily overloaded; pull a generic paginate
-  // facade from the existing plugin-augmented Octokit instance instead of
-  // trying to satisfy the overload chain with a single-arg call.
-  const paginated = octokit as unknown as {
-    paginate: {
-      iterator: (
-        route: Route,
-        params?: Record<string, unknown>,
-      ) => AsyncIterable<OctokitResponse<unknown>>;
-    };
-  };
-  const iterator = paginated.paginate.iterator(route, params);
+  // Narrow the Octokit instance to one that has the paginate-rest plugin's
+  // `iterator` method. The cast is local and never escapes the function.
+  const paginated = octokit as OctokitWithPaginate;
+  const iterator: AsyncIterable<OctokitResponse<unknown>> = paginated.paginate.iterator(
+    route,
+    params,
+  );
 
   const max = opts?.max;
 

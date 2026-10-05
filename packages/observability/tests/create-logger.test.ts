@@ -65,4 +65,22 @@ describe("createLogger", () => {
     }
     expect(captured[1]?.extra).toBe(1);
   });
+
+  it("exposes all 6 log levels as runtime-callable methods", () => {
+    const { logger, records } = makeCapturingLogger({
+      agent: "agent-test",
+      level: "trace",
+    });
+    logger.trace("t");
+    logger.debug("d");
+    logger.info("i");
+    logger.warn("w");
+    logger.error("e");
+    logger.fatal("f");
+    const captured = records() as Array<{ msg: string; level: number }>;
+    expect(captured).toHaveLength(6);
+    // Pino level numbers: trace=10, debug=20, info=30, warn=40, error=50, fatal=60.
+    expect(captured.map((r) => r.level)).toEqual([10, 20, 30, 40, 50, 60]);
+    expect(captured.map((r) => r.msg)).toEqual(["t", "d", "i", "w", "e", "f"]);
+  });
 });

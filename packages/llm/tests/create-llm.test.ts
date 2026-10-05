@@ -7,29 +7,20 @@
  * primitives and capture the call options.
  */
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 interface GenerateCallOpts {
   timeout?: number;
   maxRetries?: number;
   temperature?: number;
+  experimental_telemetry?: { isEnabled: boolean; metadata?: Record<string, string> };
 }
 
 // `vi.mock` is hoisted above module imports; the mock objects must
 // therefore also be hoisted via `vi.hoisted`.
 const mocks = vi.hoisted(() => ({
-  generateText: vi.fn(async (_opts: GenerateCallOpts): Promise<unknown> => ({
-    text: "ok",
-    usage: { inputTokens: 1, outputTokens: 1 },
-    finishReason: "stop",
-    providerMetadata: undefined,
-  })),
-  streamText: vi.fn((_opts: GenerateCallOpts): unknown => {
-    const stream = (async function* () {
-      yield "chunk";
-    })();
-    return { textStream: stream };
-  }),
+  generateText: vi.fn(),
+  streamText: vi.fn(),
 }));
 
 vi.mock("ai", async () => {
@@ -44,9 +35,29 @@ vi.mock("ai", async () => {
 import { createLLM } from "../src/create-llm.ts";
 import { MODELS } from "../src/models.ts";
 
-afterEach(() => {
-  mocks.generateText.mockClear();
-  mocks.streamText.mockClear();
+const DEFAULT_GENERATE_RESULT = {
+  text: "ok",
+  usage: { inputTokens: 1, outputTokens: 1 },
+  finishReason: "stop",
+  providerMetadata: undefined,
+};
+
+function setupDefaultMocks(): void {
+  mocks.generateText.mockResolvedValue(DEFAULT_GENERATE_RESULT);
+  mocks.streamText.mockImplementation(() => {
+    const stream = (async function* () {
+      yield "chunk";
+    })();
+    return { textStream: stream };
+  });
+}
+
+beforeEach(() => {
+  // mockReset wipes both the recorded calls AND any implementation, so
+  // we re-install the default mock implementations before each test.
+  mocks.generateText.mockReset();
+  mocks.streamText.mockReset();
+  setupDefaultMocks();
 });
 
 function firstCallOpts(): GenerateCallOpts {

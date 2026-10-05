@@ -18,7 +18,7 @@
     "head": {
       "label": "octocat:feature/throttling",
       "ref": "feature/throttling",
-      "sha": "abc1234567890",
+      "sha": "abc1234567890abc1234567890abc1234567890a",
       "user": {
         "login": "octocat",
         "id": 1,
@@ -45,7 +45,7 @@
     "base": {
       "label": "octocat:main",
       "ref": "main",
-      "sha": "def0987654321",
+      "sha": "def0987654321def0987654321def0987654321d",
       "user": {
         "login": "octocat",
         "id": 1,
@@ -73,7 +73,7 @@
     "updated_at": "2026-10-02T11:00:00Z",
     "closed_at": "2026-10-02T11:00:00Z",
     "merged_at": "2026-10-02T11:00:00Z",
-    "merge_commit_sha": "deadbeefcafebabe",
+    "merge_commit_sha": "deadbeefcafebabedeadbeefcafebabedeadbeef",
     "additions": 120,
     "deletions": 30,
     "changed_files": 5,
@@ -89,7 +89,8 @@
         "description": "New feature or request",
         "default": true
       }
-    ]
+    ],
+    "id": 1000
   },
   {
     "number": 43,
@@ -104,7 +105,7 @@
     "head": {
       "label": "octocat:wip/schemas",
       "ref": "wip/schemas",
-      "sha": "f00d01e1f1f1f1",
+      "sha": "f00d01e1f1f1f1f00d01e1f1f1f1f00d01e1f1f1",
       "user": null,
       "repo": {
         "id": 100,
@@ -125,7 +126,7 @@
     "base": {
       "label": "octocat:main",
       "ref": "main",
-      "sha": "def0987654321",
+      "sha": "def0987654321def0987654321def0987654321d",
       "user": {
         "login": "octocat",
         "id": 1,
@@ -161,6 +162,7 @@
     "review_comments": 0,
     "commits": 1,
     "html_url": "https://github.com/octocat/agents/pull/43",
-    "labels": []
+    "labels": [],
+    "id": 1001
   }
 ]

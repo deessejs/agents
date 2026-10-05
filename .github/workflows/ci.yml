@@ -11,6 +11,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Default to least-privilege token permissions. Each job/step that needs
+# broader access must opt back in explicitly. This blocks a compromised
+# transitive dependency from using the default write-all token.
+permissions:
+  contents: read
+
 env:
   # Enable Turborepo Remote Cache on Vercel (free for Vercel users).
   # Set TURBO_TEAM (your Vercel team slug) and TURBO_TOKEN (generated in Vercel dashboard)
@@ -27,18 +33,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
         with:
-          version: 11.5.1
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
@@ -55,6 +60,3 @@ jobs:
 
       - name: Build
         run: pnpm run build
-
-      - name: Smoke
-        run: pnpm run smoke

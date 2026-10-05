@@ -23,9 +23,13 @@ describe("PullRequestSchema", () => {
     expect(parsed.merged_at).toBeNull();
   });
 
-  it("rejects unknown fields (strict mode)", () => {
+  it("keeps unknown fields (passthrough mode — live API response)", () => {
+    // Live GitHub API responses add new fields regularly; the schema
+    // uses `.passthrough()` so downstream code can read them via the
+    // typed object without a schema bump.
     const data = { ...pullRequestsFixture[0], extra_field: "nope" };
-    expect(() => PullRequestSchema.parse(data)).toThrow(ZodError);
+    const parsed = PullRequestSchema.parse(data) as Record<string, unknown>;
+    expect(parsed.extra_field).toBe("nope");
   });
 
   it("rejects invalid state values", () => {

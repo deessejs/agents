@@ -48,6 +48,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "@workspace/tsconfig": "workspace:*",
     "vitest": "catalog:"
   },

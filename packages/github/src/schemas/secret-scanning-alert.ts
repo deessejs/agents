@@ -5,6 +5,9 @@
  */
 import { z } from "zod";
 
+import { IsoDateTimeSchema, NullableIsoDateTimeSchema } from "./datetime.ts";
+import { GitHubHtmlUrlSchema } from "./url.ts";
+
 const SecretLocationSchema = z
   .object({
     path: z.string().optional(),
@@ -13,13 +16,28 @@ const SecretLocationSchema = z
     start_column: z.number().int().optional(),
     end_column: z.number().int().optional(),
   })
-  .strict();
+  .passthrough();
 
 const SecretInstanceSchema = z
   .object({
     location: SecretLocationSchema.optional(),
   })
-  .strict();
+  .passthrough();
+
+/**
+ * Allowed resolution values per the GitHub docs. The set is small enough
+ * to keep as an enum.
+ */
+const SecretResolutionSchema = z
+  .enum([
+    "false_positive",
+    "wont_fix",
+    "revoked",
+    "used_in_tests",
+    "pattern_edited",
+    "pattern_deleted",
+  ])
+  .nullable();
 
 export const SecretScanningAlertSchema = z
   .object({
@@ -33,14 +51,14 @@ export const SecretScanningAlertSchema = z
       "pattern_edited",
       "pattern_deleted",
     ]),
-    secret_type: z.string(),
-    secret_type_display_name: z.string(),
-    resolution: z.string().nullable(),
+    secret_type: z.string().min(1).max(100),
+    secret_type_display_name: z.string().min(1).max(100),
+    resolution: SecretResolutionSchema,
     most_recent_instance: SecretInstanceSchema.optional(),
-    html_url: z.string(),
-    created_at: z.string(),
-    resolved_at: z.string().nullable().optional(),
+    html_url: GitHubHtmlUrlSchema,
+    created_at: IsoDateTimeSchema,
+    resolved_at: NullableIsoDateTimeSchema.optional(),
   })
-  .strict();
+  .passthrough();
 
 export type SecretScanningAlert = z.infer<typeof SecretScanningAlertSchema>;

@@ -4,15 +4,25 @@
  * Field reference: <https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request>.
  */
 import { z } from "zod";
-import { UserSchema } from "./user.js";
-import { LabelSchema } from "./label.js";
-import { RefSchema } from "./ref.js";
+
+import { IsoDateTimeSchema, NullableIsoDateTimeSchema } from "./datetime.ts";
+import { LabelSchema } from "./label.ts";
+import { RefSchema } from "./ref.ts";
+import { GitHubHtmlUrlSchema } from "./url.ts";
+import { UserSchema } from "./user.ts";
+
+/**
+ * PR mergeability state — GitHub documents five possible values; the API
+ * also returns `null` while it's still computing.
+ */
+const MergeableStateSchema = z.enum(["clean", "dirty", "unstable", "draft", "blocked"]).nullable();
 
 export const PullRequestSchema = z
   .object({
+    id: z.number().int().positive(),
     number: z.number().int().positive(),
-    title: z.string(),
-    body: z.string().nullable(),
+    title: z.string().min(1).max(256),
+    body: z.string().max(65_536).nullable(),
     state: z.enum(["open", "closed"]),
     draft: z.boolean(),
     merged: z.boolean().optional(),
@@ -23,10 +33,10 @@ export const PullRequestSchema = z
     user: UserSchema.nullable(),
     head: RefSchema,
     base: RefSchema,
-    created_at: z.string(),
-    updated_at: z.string(),
-    closed_at: z.string().nullable(),
-    merged_at: z.string().nullable(),
+    created_at: IsoDateTimeSchema,
+    updated_at: IsoDateTimeSchema,
+    closed_at: NullableIsoDateTimeSchema,
+    merged_at: NullableIsoDateTimeSchema,
     merge_commit_sha: z.string().nullable(),
     additions: z.number().int().nullable(),
     deletions: z.number().int().nullable(),
@@ -34,9 +44,11 @@ export const PullRequestSchema = z
     comments: z.number().int(),
     review_comments: z.number().int(),
     commits: z.number().int(),
-    html_url: z.string(),
+    html_url: GitHubHtmlUrlSchema,
     labels: z.array(LabelSchema),
   })
-  .strict();
+  // Re-export the mergeable-state enum for callers that want the type.
+  .passthrough();
 
+export { MergeableStateSchema };
 export type PullRequest = z.infer<typeof PullRequestSchema>;

@@ -9,7 +9,7 @@
  * style rules are off by default — let the formatter (oxfmt) handle those.
  */
 export const baseOxlintConfig = {
-  plugins: ["typescript", "react", "react-hooks", "jsx-a11y", "import", "promise", "vitest"],
+  plugins: ["typescript", "import", "promise", "vitest"],
   categories: {
     correctness: "error",
     perf: "error",
@@ -17,9 +17,10 @@ export const baseOxlintConfig = {
     // exports position) that are fine in our package layout. We use
     // a focused rule list below instead.
     restriction: "off",
-    // suspicious is off: catches too many false positives in test
-    // fixtures and forward-looking code. Targeted rules below.
-    suspicious: "off",
+    // suspicious is on at the root (highest-signal correctness rules),
+    // but tests/fixtures override it off because they intentionally
+    // exercise weird shapes.
+    suspicious: "warn",
     nursery: "warn",
     pedantic: "off",
     style: "off",
@@ -48,8 +49,17 @@ export const baseOxlintConfig = {
       "warn",
       { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
     ],
-    "@typescript-eslint/no-explicit-any": "warn",
+    // `any` enforcement philosophy: ban explicit `any` outright;
+    // allow the unsafe-pointer family at warn so existing code surfaces
+    // without blocking CI.
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/no-unsafe-argument": "warn",
     "import/no-default-export": "off",
+    // Test-only escape hatches use `__nameForTests` convention; allow it.
+    "eslint/no-underscore-dangle": [
+      "error",
+      { allowAfterThis: false, allow: ["__resetSecondaryRetryForTests", "__resetOtelForTests"] },
+    ],
   },
   // Per-directory overrides for tests.
   overrides: [

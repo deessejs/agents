@@ -11,4 +11,4 @@ export { withAgentContext } from "./with-context.ts";
 export { STANDARD_TAGS } from "./tags.ts";
 export { setupOtel, shutdownOtel } from "./otel/index.ts";
 export { getActiveContext } from "./context-store.ts";
-export type { Logger, AgentContext, LoggerConfig } from "./types.ts";
+export type { AgentContext, GenaiContext, LogFn, Logger, LoggerConfig } from "./types.ts";

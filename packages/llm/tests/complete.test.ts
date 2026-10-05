@@ -138,4 +138,53 @@ describe("complete", () => {
     expect(result.text).toBe("fallback won");
     expect(mocks.generateText).toHaveBeenCalledTimes(2);
   });
+
+  it("honors a per-call model override and reflects it on the CompletionResult", async () => {
+    mocks.generateText.mockResolvedValueOnce({
+      text: "override won",
+      usage: { inputTokens: 1, outputTokens: 1 },
+      finishReason: "stop",
+      providerMetadata: undefined,
+    });
+
+    const result = await complete(
+      { prompt: "hi", model: "minimax-m2.7" as typeof MODELS.PRIMARY },
+      baseConfig,
+    );
+    expect(result.text).toBe("override won");
+    expect(result.model).toBe("minimax-m2.7");
+    // Only the primary should have been tried (override replaces primary).
+    expect(mocks.generateText).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards metadata to generateText via experimental_telemetry.metadata", async () => {
+    mocks.generateText.mockResolvedValueOnce({
+      text: "x",
+      usage: { inputTokens: 1, outputTokens: 1 },
+      finishReason: "stop",
+      providerMetadata: undefined,
+    });
+
+    await complete({ prompt: "hi", metadata: { agent: "ta", schedule: "daily" } }, baseConfig);
+    const opts = lastCall();
+    const telemetry = opts.experimental_telemetry as
+      | { isEnabled?: boolean; metadata?: Record<string, string> }
+      | undefined;
+    expect(telemetry?.isEnabled).toBe(true);
+    expect(telemetry?.metadata).toEqual({ agent: "ta", schedule: "daily" });
+  });
+
+  it("validates maxTokens at the API boundary and throws on out-of-range", async () => {
+    await expect(complete({ prompt: "hi", maxTokens: 9000 }, baseConfig)).rejects.toThrow(
+      /maxTokens/,
+    );
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it("validates temperature at the API boundary and throws on out-of-range", async () => {
+    await expect(complete({ prompt: "hi", temperature: 5 }, baseConfig)).rejects.toThrow(
+      /temperature/,
+    );
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
 });

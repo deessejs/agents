@@ -18,9 +18,13 @@ describe("IssueSchema", () => {
     expect(parsed.body).toBeNull();
   });
 
-  it("rejects unknown fields", () => {
+  it("keeps unknown fields (passthrough mode — live API response)", () => {
+    // Live GitHub API responses add new fields regularly; the schema
+    // uses `.passthrough()` so downstream code can read them via the
+    // typed object without a schema bump.
     const data = { ...issuesFixture[0], suspicious_field: true };
-    expect(() => IssueSchema.parse(data)).toThrow(ZodError);
+    const parsed = IssueSchema.parse(data) as Record<string, unknown>;
+    expect(parsed.suspicious_field).toBe(true);
   });
 
   it("rejects invalid state", () => {

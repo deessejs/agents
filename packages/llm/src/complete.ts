@@ -1,65 +1,55 @@
-import type { LanguageModel } from "ai";
 import { generateText } from "ai";
-import { minimax } from "@ai-sdk/minimax";
-
 import { withCaching } from "./cache.ts";
+import {
+  readCachedInputTokens,
+  validatedNumber,
+  MaxTokensSchema,
+  TemperatureSchema,
+} from "./metadata.ts";
+import { buildResolvers, type MiniMaxModel } from "./resolver.ts";
 import { withFallback } from "./fallback.ts";
 import type { CompletionOpts, CompletionResult } from "./types.ts";
 import type { ModelId } from "./models.ts";
 
 /**
- * Anthropic-specific metadata shape we care about. Other providers may
- * emit their own keys (which we simply ignore).
+ * Implementation of {@link LLM.complete} that applies our defaults
+ * and walks the fallback chain on retryable errors.
  */
-interface AnthropicProviderMetadata {
-  usage?: {
-    cache_read_input_tokens?: number;
-    cache_creation_input_tokens?: number;
-    input_tokens?: number;
-    output_tokens?: number;
-  };
-}
+export async function complete(
+  opts: CompletionOpts,
+  config: {
+    primary: ModelId;
+    fallbackModels: ReadonlyArray<ModelId>;
+    promptCaching: boolean;
+    maxRetries: number;
+    timeoutMs: number;
+  },
+): Promise<CompletionResult> {
+  const validatedMaxTokens = validatedNumber(MaxTokensSchema, opts.maxTokens, "maxTokens");
+  const validatedTemperature = validatedNumber(TemperatureSchema, opts.temperature, "temperature");
 
-/**
- * Internal shape of the merged `providerMetadata` map. Unrecognized keys
- * are intentionally tolerated.
- */
-type ProviderMetadataMap = Record<string, AnthropicProviderMetadata | undefined>;
+  const resolvers = buildResolvers(config.primary, config.fallbackModels, opts.model);
+  const effectiveModel = opts.model ?? config.primary;
 
-/**
- * Extract cached input tokens from the Anthropic provider metadata block.
- * Returns 0 when no cache info is present.
- */
-function readCached(providerMetadata: unknown): number {
-  if (typeof providerMetadata !== "object" || providerMetadata === null) return 0;
-  const anthropic = (providerMetadata as ProviderMetadataMap).anthropic;
-  return anthropic?.usage?.cache_read_input_tokens ?? 0;
-}
-
-/**
- * Resolve a model id to a `LanguageModel` instance. Kept as a separate
- * function so the fallback chain can build its list of resolvers.
- */
-function resolveModel(modelId: ModelId): LanguageModel {
-  return minimax(modelId) as unknown as LanguageModel;
-}
-
-/**
- * Build the resolver list for `withFallback`. The first resolver is the
- * primary model (or the per-call override); any remaining entries come
- * from `LLMConfig.fallbackModels`.
- */
-function buildResolvers(
-  primary: ModelId,
-  fallbackModels: ReadonlyArray<ModelId>,
-  perCallOverride: ModelId | undefined,
-): Array<() => LanguageModel> {
-  const head = perCallOverride ?? primary;
-  const resolvers: Array<() => LanguageModel> = [() => resolveModel(head)];
-  for (const id of fallbackModels) {
-    resolvers.push(() => resolveModel(id));
-  }
-  return resolvers;
+  return await withFallback(
+    async () => {
+      const [resolver] = resolvers;
+      if (resolver === undefined) {
+        throw new Error("[@workspace/llm] no model configured");
+      }
+      return runComplete(resolver(), opts, config, effectiveModel, {
+        maxTokens: validatedMaxTokens,
+        temperature: validatedTemperature,
+      });
+    },
+    ...resolvers.slice(1).map(
+      (resolver) => async () =>
+        runComplete(resolver(), opts, config, effectiveModel, {
+          maxTokens: validatedMaxTokens,
+          temperature: validatedTemperature,
+        }),
+    ),
+  );
 }
 
 /**
@@ -68,7 +58,7 @@ function buildResolvers(
  * chain can call it for each resolver without code duplication.
  */
 async function runComplete(
-  model: LanguageModel,
+  model: MiniMaxModel,
   opts: CompletionOpts,
   config: {
     promptCaching: boolean;
@@ -76,6 +66,10 @@ async function runComplete(
     timeoutMs: number;
   },
   effectiveModel: ModelId,
+  validated: {
+    maxTokens: number | undefined;
+    temperature: number | undefined;
+  },
 ): Promise<CompletionResult> {
   const useCaching =
     config.promptCaching &&
@@ -85,11 +79,14 @@ async function runComplete(
 
   const result = await generateText({
     model,
-    maxOutputTokens: opts.maxTokens ?? 2000,
-    temperature: opts.temperature ?? 0.3,
+    maxOutputTokens: validated.maxTokens ?? 2000,
+    temperature: validated.temperature ?? 0.3,
     maxRetries: config.maxRetries,
     timeout: config.timeoutMs,
-    experimental_telemetry: { isEnabled: true },
+    experimental_telemetry: {
+      isEnabled: true,
+      ...(opts.metadata !== undefined ? { metadata: { ...opts.metadata } } : {}),
+    },
     ...(useCaching
       ? { instructions: withCaching(opts.system ?? "") }
       : opts.system !== undefined && opts.system.length > 0
@@ -98,10 +95,7 @@ async function runComplete(
     prompt: opts.prompt,
   });
 
-  const cached = readCached(result.providerMetadata);
-  // AI SDK v7 `LanguageModelUsage` exposes `inputTokens` and
-  // `outputTokens` as plain scalars (the structured breakdown lives on
-  // `inputTokenDetails` / `outputTokenDetails`).
+  const cached = readCachedInputTokens(result.providerMetadata);
   const inputTokens = result.usage.inputTokens ?? 0;
   const outputTokens = result.usage.outputTokens ?? 0;
   return {
@@ -114,35 +108,4 @@ async function runComplete(
     finishReason: result.finishReason,
     model: effectiveModel,
   };
-}
-
-/**
- * Implementation of {@link LLM.complete} that applies our defaults and
- * walks the fallback chain on retryable errors.
- */
-export async function complete(
-  opts: CompletionOpts,
-  config: {
-    primary: ModelId;
-    fallbackModels: ReadonlyArray<ModelId>;
-    promptCaching: boolean;
-    maxRetries: number;
-    timeoutMs: number;
-  },
-): Promise<CompletionResult> {
-  const resolvers = buildResolvers(config.primary, config.fallbackModels, opts.model);
-  const effectiveModel = opts.model ?? config.primary;
-
-  return await withFallback(
-    async () => {
-      const [resolver] = resolvers;
-      if (resolver === undefined) {
-        throw new Error("[@workspace/llm] no model configured");
-      }
-      return runComplete(resolver(), opts, config, effectiveModel);
-    },
-    ...resolvers
-      .slice(1)
-      .map((resolver) => async () => runComplete(resolver(), opts, config, effectiveModel)),
-  );
 }

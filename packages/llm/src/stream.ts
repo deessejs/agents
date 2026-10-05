@@ -1,38 +1,17 @@
-import type { LanguageModel } from "ai";
 import { streamText } from "ai";
-import { minimax } from "@ai-sdk/minimax";
-
 import { withCaching } from "./cache.ts";
+import { validatedNumber, MaxTokensSchema, TemperatureSchema } from "./metadata.ts";
+import { buildResolvers, type MiniMaxModel } from "./resolver.ts";
 import { withFallback } from "./fallback.ts";
 import type { CompletionOpts } from "./types.ts";
 import type { ModelId } from "./models.ts";
 
-function resolveModel(modelId: ModelId): LanguageModel {
-  return minimax(modelId) as unknown as LanguageModel;
-}
-
 /**
- * Build the resolver list for the streaming path. Mirrors {@link complete}'s
- * resolver construction but is kept in this module so the two paths can
- * diverge if needed (e.g., only streaming-specific defaults).
- */
-function buildResolvers(
-  primary: ModelId,
-  fallbackModels: ReadonlyArray<ModelId>,
-  perCallOverride: ModelId | undefined,
-): Array<() => LanguageModel> {
-  const head = perCallOverride ?? primary;
-  const resolvers: Array<() => LanguageModel> = [() => resolveModel(head)];
-  for (const id of fallbackModels) {
-    resolvers.push(() => resolveModel(id));
-  }
-  return resolvers;
-}
-
-/**
- * Run a single `streamText` call and return its text-only async iterable.
+ * Run a single `streamText` call and return its text-only async
+ * iterable.
  *
- * Wrapped so we can attach our fallback chain uniformly with `complete()`.
+ * Wrapped so we can attach our fallback chain uniformly with
+ * {@link complete}.
  */
 function runStream(
   opts: CompletionOpts,
@@ -41,7 +20,11 @@ function runStream(
     maxRetries: number;
     timeoutMs: number;
   },
-  model: LanguageModel,
+  model: MiniMaxModel,
+  validated: {
+    maxTokens: number | undefined;
+    temperature: number | undefined;
+  },
 ): AsyncIterable<string> {
   const useCaching =
     config.promptCaching &&
@@ -51,11 +34,14 @@ function runStream(
 
   return streamText({
     model,
-    maxOutputTokens: opts.maxTokens ?? 2000,
-    temperature: opts.temperature ?? 0.3,
+    maxOutputTokens: validated.maxTokens ?? 2000,
+    temperature: validated.temperature ?? 0.3,
     maxRetries: config.maxRetries,
     timeout: config.timeoutMs,
-    experimental_telemetry: { isEnabled: true },
+    experimental_telemetry: {
+      isEnabled: true,
+      ...(opts.metadata !== undefined ? { metadata: { ...opts.metadata } } : {}),
+    },
     ...(useCaching
       ? { instructions: withCaching(opts.system ?? "") }
       : opts.system !== undefined && opts.system.length > 0
@@ -68,9 +54,9 @@ function runStream(
 /**
  * Implementation of {@link LLM.streamComplete}.
  *
- * If the primary model throws a retryable error during stream startup we
- * retry on the next fallback model; mid-stream errors propagate to the
- * caller via the standard `for await` loop.
+ * If the primary model throws a retryable error during stream startup
+ * we retry on the next fallback model; mid-stream errors propagate to
+ * the caller via the standard `for await` loop.
  */
 export async function streamComplete(
   opts: CompletionOpts,
@@ -82,13 +68,25 @@ export async function streamComplete(
     timeoutMs: number;
   },
 ): Promise<AsyncIterable<string>> {
+  const validatedMaxTokens = validatedNumber(MaxTokensSchema, opts.maxTokens, "maxTokens");
+  const validatedTemperature = validatedNumber(TemperatureSchema, opts.temperature, "temperature");
+
   const resolvers = buildResolvers(config.primary, config.fallbackModels, opts.model);
   return await withFallback(
     async () => {
       const [resolver] = resolvers;
       if (resolver === undefined) throw new Error("[@workspace/llm] no model configured");
-      return runStream(opts, config, resolver());
+      return runStream(opts, config, resolver(), {
+        maxTokens: validatedMaxTokens,
+        temperature: validatedTemperature,
+      });
     },
-    ...resolvers.slice(1).map((resolver) => async () => runStream(opts, config, resolver())),
+    ...resolvers.slice(1).map(
+      (resolver) => async () =>
+        runStream(opts, config, resolver(), {
+          maxTokens: validatedMaxTokens,
+          temperature: validatedTemperature,
+        }),
+    ),
   );
 }

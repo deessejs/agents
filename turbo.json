@@ -4,31 +4,38 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "tsconfig.json",
+        "package.json",
+        "tsconfig.tsbuildinfo"
+      ]
     },
     "lint": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "tests/**",
+        "oxlint.config.ts",
+        ".oxfmtrc.json",
+        "tsconfig.json"
+      ]
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "inputs": ["$TURBO_DEFAULT$", "src/**", "tsconfig.json", "package.json"]
     },
     "test": {
-      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "src/**", "tests/**", "vitest.config.ts"],
       "outputs": ["coverage/**"]
     },
     "dev": {
       "cache": false,
       "persistent": true
     },
-    "smoke": {
-      "cache": false,
-      "dependsOn": ["build"]
-    },
     "clean": {
-      "cache": false,
-      "outputs": ["dist/**", ".turbo/**"]
+      "cache": false
     }
   }
 }

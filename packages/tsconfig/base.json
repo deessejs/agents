@@ -28,7 +28,11 @@
     "declarationMap": true,
     "sourceMap": true,
 
-    "incremental": true
+    "incremental": true,
+
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
   },
   "exclude": ["node_modules", "dist", ".turbo", ".next"]
 }

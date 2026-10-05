@@ -12,8 +12,14 @@ import { retry } from "@octokit/plugin-retry";
 import { defaultThrottleHandlers } from "./throttle.js";
 import type { GitHubClientConfig } from "./client.js";
 
-/** The Octokit class composed with our three plugins. */
-const MyOctokit = Octokit.plugin(throttling, retry, paginateRest);
+/**
+ * The Octokit class composed with our three plugins.
+ *
+ * Exported (not just module-local) so `pagination.ts` can derive the
+ * `InstanceType<typeof ComposedOctokit>` paginated-Octokit shape without
+ * resorting to `as unknown as { paginate: ... }` casts.
+ */
+export const ComposedOctokit = Octokit.plugin(throttling, retry, paginateRest);
 
 /**
  * Build an Octokit instance configured with throttling + retry + pagination.
@@ -25,7 +31,7 @@ const MyOctokit = Octokit.plugin(throttling, retry, paginateRest);
 export function createOctokit(config: GitHubClientConfig): Octokit {
   // With `exactOptionalPropertyTypes: true`, we must omit optional
   // properties rather than passing `undefined`.
-  const opts: ConstructorParameters<typeof MyOctokit>[0] = {
+  const opts: ConstructorParameters<typeof ComposedOctokit>[0] = {
     auth: config.auth,
     userAgent: config.userAgent ?? "agents-studio",
     request: { timeout: config.requestTimeoutMs ?? 10_000 },
@@ -43,5 +49,5 @@ export function createOctokit(config: GitHubClientConfig): Octokit {
   if (config.baseUrl !== undefined) {
     opts.baseUrl = config.baseUrl;
   }
-  return new MyOctokit(opts);
+  return new ComposedOctokit(opts);
 }

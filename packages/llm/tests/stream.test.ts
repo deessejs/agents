@@ -76,4 +76,22 @@ describe("streamComplete", () => {
     }
     expect(collected).toEqual([]);
   });
+
+  it("propagates errors that occur mid-stream", async () => {
+    mocks.streamText.mockReturnValueOnce({
+      textStream: (async function* () {
+        yield "first ";
+        throw new Error("midstream boom");
+      })(),
+    });
+
+    const stream = await streamComplete({ prompt: "hi" }, baseConfig);
+    const collected: string[] = [];
+    await expect(async () => {
+      for await (const chunk of stream) {
+        collected.push(chunk);
+      }
+    }).rejects.toThrow("midstream boom");
+    expect(collected).toEqual(["first "]);
+  });
 });

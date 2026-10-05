@@ -5,6 +5,9 @@
  */
 import { z } from "zod";
 
+import { IsoDateTimeSchema, NullableIsoDateTimeSchema } from "./datetime.ts";
+import { GitHubHtmlUrlSchema } from "./url.ts";
+
 const AlertLocationSchema = z
   .object({
     path: z.string(),
@@ -13,7 +16,7 @@ const AlertLocationSchema = z
     start_column: z.number().int().optional(),
     end_column: z.number().int().optional(),
   })
-  .strict();
+  .passthrough();
 
 const AlertRuleSchema = z
   .object({
@@ -21,27 +24,27 @@ const AlertRuleSchema = z
     name: z.string().optional(),
     severity: z.enum(["low", "medium", "high", "critical"]).nullable().optional(),
   })
-  .strict();
+  .passthrough();
 
 const AlertToolSchema = z
   .object({
     name: z.string().optional(),
     version: z.string().nullable().optional(),
   })
-  .strict();
+  .passthrough();
 
 const VersionedMessageSchema = z
   .object({
     text: z.string().optional(),
   })
-  .strict();
+  .passthrough();
 
 const AlertInstanceSchema = z
   .object({
     location: AlertLocationSchema.optional(),
     message: VersionedMessageSchema.optional(),
   })
-  .strict();
+  .passthrough();
 
 export const CodeScanningAlertSchema = z
   .object({
@@ -52,11 +55,11 @@ export const CodeScanningAlertSchema = z
     rule: AlertRuleSchema.optional(),
     tool: AlertToolSchema.optional(),
     most_recent_instance: AlertInstanceSchema.optional(),
-    html_url: z.string(),
-    created_at: z.string(),
-    dismissed_at: z.string().nullable().optional(),
-    fixed_at: z.string().nullable().optional(),
+    html_url: GitHubHtmlUrlSchema,
+    created_at: IsoDateTimeSchema,
+    dismissed_at: NullableIsoDateTimeSchema.optional(),
+    fixed_at: NullableIsoDateTimeSchema.optional(),
   })
-  .strict();
+  .passthrough();
 
 export type CodeScanningAlert = z.infer<typeof CodeScanningAlertSchema>;

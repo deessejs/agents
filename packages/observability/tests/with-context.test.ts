@@ -84,4 +84,55 @@ describe("withAgentContext", () => {
     const ids = new Set(observed.map((o) => o.run_id));
     expect(ids.size).toBe(5);
   });
+
+  it("logger.child() inside withAgentContext merges context tags + child bindings", async () => {
+    const { logger, records } = makeCapturingLogger({ agent: "agent-x" });
+    await withAgentContext(
+      { agent: "agent-x", run_id: "run-77", schedule: "weekly-recap" },
+      async () => {
+        const child = logger.child({ component: "recap", user_id: "u-9" });
+        child.info("child-line");
+      },
+    );
+    const captured = records() as Array<Record<string, unknown>>;
+    expect(captured).toHaveLength(1);
+    const record = captured[0] as Record<string, unknown>;
+    // Context tags inherited:
+    expect(record["agent.name"]).toBe("agent-x");
+    expect(record["agent.run_id"]).toBe("run-77");
+    expect(record["agent.schedule"]).toBe("weekly-recap");
+    // Child bindings applied:
+    expect(record.component).toBe("recap");
+    expect(record.user_id).toBe("u-9");
+  });
+
+  it("projects genai.* tags from ctx.genai onto every log line", async () => {
+    const { logger, records } = makeCapturingLogger({ agent: "agent-x" });
+    await withAgentContext(
+      {
+        agent: "agent-x",
+        run_id: "run-genai",
+        genai: {
+          provider: "anthropic",
+          operation: "chat",
+          model: "claude-sonnet-4-5",
+          input_tokens: 100,
+          output_tokens: 200,
+          finish_reasons: ["end_turn"],
+        },
+      },
+      async () => {
+        logger.info("after-llm-call");
+      },
+    );
+    const captured = records() as Array<Record<string, unknown>>;
+    expect(captured).toHaveLength(1);
+    const record = captured[0] as Record<string, unknown>;
+    expect(record["gen_ai.provider.name"]).toBe("anthropic");
+    expect(record["gen_ai.operation.name"]).toBe("chat");
+    expect(record["gen_ai.request.model"]).toBe("claude-sonnet-4-5");
+    expect(record["gen_ai.usage.input_tokens"]).toBe(100);
+    expect(record["gen_ai.usage.output_tokens"]).toBe(200);
+    expect(record["gen_ai.response.finish_reasons"]).toEqual(["end_turn"]);
+  });
 });

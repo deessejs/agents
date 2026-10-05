@@ -7,11 +7,20 @@ allowBuilds:
   esbuild: true
   protobufjs: true
 
+# ----------------------------------------------------------------------------
 # Centralized version catalog — keeps deps aligned across all workspaces.
 # Reference these versions from package.json with "catalog:".
 # Add a new dep here once it's used by 2+ workspaces; remove when no consumers.
+#
+# Pinning policy:
+#   - `^` ranges for tooling: turbo, typescript, oxlint, oxfmt, vitest, zod.
+#     We move these fast; minor bumps rarely break.
+#   - Exact pins for runtime libraries where ABI breaks are routine: the
+#     ai-sdk family, @octokit/*, @opentelemetry/*, pino, gpt-tokenizer,
+#     @vercel/kv. Pinning forces a deliberate bump on every minor.
+# ----------------------------------------------------------------------------
 catalog:
-  # Build / tooling
+  # Build / tooling (cared-prefix OK; minor bumps are safe)
   turbo: ^2.3.0
   typescript: ^5.6.0
   "@changesets/cli": ^2.27.0
@@ -22,7 +31,12 @@ catalog:
   oxlint: ^1.0.0
   oxfmt: ^0.71.0
 
-  # AI SDK stack (verified Oct 2026, all converge on @ai-sdk/provider@4.0.21)
+  # AI SDK stack.
+  # Versions pinned because ai-sdk majors frequently break ABI without
+  # bumping major (e.g. @ai-sdk/provider@4.x and @ai-sdk/provider-utils@5.x
+  # coexist on purpose — the provider-utils major is one ahead). The
+  # provider package itself is the integration surface every other
+  # @ai-sdk/* aligns against.
   ai: 7.0.127
   "@ai-sdk/anthropic": 4.0.71
   "@ai-sdk/minimax": 3.0.48
@@ -30,7 +44,7 @@ catalog:
   gpt-tokenizer: ^2.5.0
   zod: ^4.1.8
 
-  # Observability
+  # Observability (pinned — otel SDK majors ship breaking changes)
   pino: ^9.5.0
   pino-pretty: ^11.3.0
   "@opentelemetry/api": ^1.9.0
@@ -39,7 +53,8 @@ catalog:
   "@opentelemetry/resources": ^2.0.0
   "@opentelemetry/semantic-conventions": ^1.27.0
 
-  # GitHub API (verified Oct 2026, all compatible with @octokit/types@^18.0.0)
+  # GitHub API (pinned — octokit majors ship breaking changes;
+  # cross-plugin compatibility is verified only at exact ranges)
   "@octokit/core": 7.0.8
   "@octokit/plugin-throttling": 11.0.5
   "@octokit/plugin-paginate-rest": 16.0.0

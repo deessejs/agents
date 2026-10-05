@@ -14,8 +14,7 @@ export { MODELS } from "./models.ts";
 export { countTokens } from "./tokens.ts";
 export { withCaching } from "./cache.ts";
 export { withFallback } from "./fallback.ts";
-export { isRetryable, classifyError } from "./error.ts";
-export type { LLMErrorKind } from "./error.ts";
+export { isRetryable } from "./error.ts";
 
 export type { LLM, LLMConfig, CompletionOpts, CompletionResult, CompletionUsage } from "./types.ts";
 

@@ -1,6 +1,6 @@
 import type { z, ZodType } from "zod";
 import { toEnvValidationError } from "./error.ts";
-import type { Env } from "./types.ts";
+import type { Inferred } from "./types.ts";
 
 /**
  * Validates `process.env` against the given Zod schema and returns a
@@ -19,11 +19,11 @@ import type { Env } from "./types.ts";
  * export const env = createEnv(schema);
  * ```
  */
-export function createEnv<T extends ZodType>(schema: T): Env<T> {
+export function createEnv<T extends ZodType>(schema: T): Inferred<T> {
   const source = process.env as Record<string, unknown>;
   const result = schema.safeParse(source);
   if (!result.success) {
     throw toEnvValidationError(result.error);
   }
-  return Object.freeze(result.data) as Readonly<z.infer<T>>;
+  return Object.freeze(result.data) satisfies Readonly<z.infer<T>>;
 }

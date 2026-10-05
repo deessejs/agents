@@ -9,8 +9,10 @@
  * request after the provided delay. Returning `false` rejects the request
  * with an `RequestError`.
  *
- * We default to retrying up to 3 times on primary rate limits and always
- * retrying on secondary rate limits (GitHub's documented recommendation).
+ * We default to retrying up to 3 times on primary rate limits. On
+ * secondary rate limits we retry up to `secondaryMaxRetries` (default 5)
+ * times — bound because the plugin's `onSecondaryRateLimit` signature
+ * does NOT include a retry count, so we track it in module state.
  */
 import type { Octokit } from "@octokit/core";
 import type { EndpointDefaults } from "@octokit/types";
@@ -36,6 +38,12 @@ export interface ThrottleHandlers {
 export interface DefaultThrottleHandlersOptions {
   /** Maximum number of retries on primary rate limit. Defaults to 3. */
   maxRetries?: number;
+  /**
+   * Maximum number of retries on secondary rate limit. Defaults to 5.
+   * (Bounded because the plugin signature doesn't expose retryCount for
+   * secondary — returning `true` unconditionally would loop forever.)
+   */
+  secondaryMaxRetries?: number;
   /** Optional logger compatible with Octokit's log interface. */
   logger?: { warn: (message: string) => unknown };
 }
@@ -47,11 +55,45 @@ export interface DefaultThrottleHandlersOptions {
 const noopLogger = { warn: (_msg: string) => undefined };
 
 /**
+ * Module-level secondary-retry counter. Keyed by a stable identifier
+ * derived from the request URL so two unrelated requests don't share a
+ * quota; cleared on each call to {@link resetSecondaryRetryCounter}.
+ */
+const secondaryRetryCounts = new Map<string, number>();
+
+/**
+ * Increment the secondary-retry counter for a key and return the new
+ * value.
+ */
+function bumpSecondaryRetry(key: string): number {
+  const next = (secondaryRetryCounts.get(key) ?? 0) + 1;
+  secondaryRetryCounts.set(key, next);
+  return next;
+}
+
+/**
+ * Reset the secondary-retry counter for a key — call after a successful
+ * request to release the slot.
+ */
+function clearSecondaryRetry(key: string): void {
+  secondaryRetryCounts.delete(key);
+}
+
+/**
+ * Test-only hook: forget all secondary-retry state. Production code must
+ * never call this.
+ */
+export function __resetSecondaryRetryForTests(): void {
+  secondaryRetryCounts.clear();
+}
+
+/**
  * Returns the default throttle callbacks required by the
  * `@octokit/plugin-throttling` plugin.
  */
 export function defaultThrottleHandlers(opts?: DefaultThrottleHandlersOptions): ThrottleHandlers {
   const maxRetries = opts?.maxRetries ?? 3;
+  const secondaryMax = opts?.secondaryMaxRetries ?? 5;
   const log = opts?.logger ?? noopLogger;
 
   return {
@@ -63,11 +105,17 @@ export function defaultThrottleHandlers(opts?: DefaultThrottleHandlersOptions): 
       // Returning true here triggers the retry; false aborts.
       return retryCount < maxRetries;
     },
-    onSecondaryRateLimit: (retryAfter, options) => {
+    onSecondaryRateLimit: (retryAfter, options, _octokit) => {
+      const key = `${options.method} ${options.url}`;
+      const attempt = bumpSecondaryRetry(key);
       log.warn(
-        `[github] secondary rate limit hit on ${options.method} ${options.url}, ` +
-          `retrying after ${retryAfter}s`,
+        `[github] secondary rate limit hit on ${key}, ` +
+          `retrying after ${retryAfter}s (attempt ${attempt}/${secondaryMax + 1})`,
       );
+      if (attempt > secondaryMax) {
+        clearSecondaryRetry(key);
+        return false;
+      }
       return true;
     },
   };

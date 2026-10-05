@@ -4,7 +4,7 @@ import { resendSchema } from "../src/schemas/resend.ts";
 describe("resendSchema", () => {
   it("parses a complete valid Resend config", () => {
     const result = resendSchema.safeParse({
-      RESEND_API_KEY: "re_abc123",
+      RESEND_API_KEY: "re_abcdefghijklmnopqrstuv",
       RESEND_FROM_ADDRESS: "agent@example.com",
       RESEND_FROM_NAME: "Acme",
       RESEND_REPLY_TO: "reply@example.com",
@@ -14,7 +14,7 @@ describe("resendSchema", () => {
 
   it("applies the default FROM_NAME and accepts a missing REPLY_TO", () => {
     const result = resendSchema.safeParse({
-      RESEND_API_KEY: "re_abc123",
+      RESEND_API_KEY: "re_abcdefghijklmnopqrstuv",
       RESEND_FROM_ADDRESS: "agent@example.com",
     });
     expect(result.success).toBe(true);
@@ -32,7 +32,17 @@ describe("resendSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       const messages = result.error.issues.map((issue) => issue.message);
-      expect(messages).toContain("RESEND_API_KEY must start with 're_'");
+      expect(messages).toContain(
+        "RESEND_API_KEY must start with 're_' followed by at least 20 identifier characters",
+      );
     }
+  });
+
+  it("rejects an re_ prefix that is too short", () => {
+    const result = resendSchema.safeParse({
+      RESEND_API_KEY: "re_short",
+      RESEND_FROM_ADDRESS: "agent@example.com",
+    });
+    expect(result.success).toBe(false);
   });
 });

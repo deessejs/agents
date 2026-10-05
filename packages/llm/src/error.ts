@@ -38,27 +38,3 @@ export function isRetryable(err: unknown): boolean {
   }
   return false;
 }
-
-/**
- * Classify an error into one of a small number of categories for
- * observability. We never throw inside `classifyError`; it returns
- * `"unknown"` for inputs we don't recognize.
- */
-export type LLMErrorKind =
-  | "retryable"
-  | "non-retryable"
-  | "aborted"
-  | "auth"
-  | "validation"
-  | "unknown";
-
-export function classifyError(err: unknown): LLMErrorKind {
-  if (isRetryable(err)) return "retryable";
-  if (err instanceof Error) {
-    const name = err.name;
-    if (name === "AbortError" || name === "APIUserAbortError") return "aborted";
-    if (name === "LoadAPIKeyError" || name === "AuthenticationError") return "auth";
-    if (name === "InvalidPromptError" || name === "TypeValidationError") return "validation";
-  }
-  return "unknown";
-}

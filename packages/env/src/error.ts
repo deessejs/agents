@@ -1,11 +1,10 @@
 import type { z } from "zod";
 
 /**
- * Thrown when `createEnv` or `parseEnv` fails to validate the environment.
+ * Thrown when `createEnv` fails to validate the environment.
  *
- * The message is already formatted for humans via `formatEnvError`,
- * so printing `err.message` is enough to surface a useful error
- * to operators.
+ * The message is already formatted for humans, so printing
+ * `err.message` is enough to surface a useful error to operators.
  */
 export class EnvValidationError extends Error {
   public readonly issues: ReadonlyArray<EnvIssue>;
@@ -43,7 +42,7 @@ export interface EnvIssue {
  * Keep entries short, imperative, and never include the value of a
  * secret. These hints are printed verbatim in error messages.
  */
-const HINTS: Readonly<Record<string, string>> = {
+const HINTS: Readonly<Record<string, string>> = Object.freeze({
   GITHUB_TOKEN:
     "set GITHUB_TOKEN in your .env or Vercel env vars (fine-grained PAT, needs: contents:read, issues:read, pull_requests:read)",
   GITHUB_ORG: "set GITHUB_ORG to the GitHub organisation slug the agent operates on",
@@ -55,7 +54,7 @@ const HINTS: Readonly<Record<string, string>> = {
   VERCEL_REGION: "set VERCEL_REGION to the deployment region (set automatically by Vercel)",
   NODE_ENV: "set NODE_ENV to one of: development, test, staging, production",
   LOG_LEVEL: "set LOG_LEVEL to one of: trace, debug, info, warn, error, fatal",
-};
+});
 
 /**
  * Keys that are considered secrets. Their values are never echoed in
@@ -65,6 +64,10 @@ const SECRET_KEYS: ReadonlySet<string> = new Set(["GITHUB_TOKEN", "RESEND_API_KE
 
 /**
  * Returns a short, human-readable label for an issue.
+ *
+ * Uses a discriminated-union narrowing switch on `issue.code` so that
+ * each branch has a narrowed `issue` shape and we never need an `as`
+ * cast to read provider-specific fields.
  */
 function describeMessage(issue: z.ZodIssue): string {
   switch (issue.code) {
@@ -72,8 +75,13 @@ function describeMessage(issue: z.ZodIssue): string {
       return "Invalid type";
     case "too_small":
       return "Required";
-    case "invalid_format":
-      return `Invalid ${(issue as { format?: string }).format ?? "format"}`;
+    case "invalid_format": {
+      // `invalid_format` issues always carry a string `format` (e.g.
+      // "email", "url", "regex"); the narrowing predicate below proves
+      // it without an `as` cast.
+      const format: string = typeof issue.format === "string" ? issue.format : "format";
+      return `Invalid ${format}`;
+    }
     case "unrecognized_keys":
       return "Unrecognized keys";
     case "invalid_value":
@@ -87,20 +95,23 @@ function describeMessage(issue: z.ZodIssue): string {
 
 /**
  * Masks secret values so they don't leak into error output.
- * Non-secrets are truncated to 32 chars for readability.
+ *
+ * Known secret keys always render as `"[REDACTED]"` — we never leak
+ * even a 2-character prefix, because a prefix narrows the search space
+ * for an attacker. Non-secrets are truncated to 32 chars for readability.
+ *
+ * Internal: exported only so tests can drive it directly. Not part of
+ * the package's public API surface — see `src/index.ts`.
  */
-function maskValue(key: string, value: unknown): string {
+export function maskValue(key: string, value: unknown): string {
   if (value === undefined) return "undefined";
   if (value === null) return "null";
+  if (SECRET_KEYS.has(key)) return "[REDACTED]";
   const asString = typeof value === "string" ? value : JSON.stringify(value);
-  if (SECRET_KEYS.has(key)) {
-    if (asString.length <= 4) return "***";
-    return `${asString.slice(0, 2)}***${asString.slice(-2)}`;
-  }
   if (asString.length > 32) {
     return `${asString.slice(0, 29)}...`;
   }
-  return JSON.stringify(asString);
+  return asString;
 }
 
 /**
@@ -108,6 +119,9 @@ function maskValue(key: string, value: unknown): string {
  *
  * The result always ends with a "fail-fast" footer so the message
  * reads as a complete instruction when printed to stderr.
+ *
+ * Internal: exported only so `create-env.ts` can call it. Not part of
+ * the package's public API surface — see `src/index.ts`.
  */
 export function formatEnvError(error: z.ZodError): string {
   const issues: EnvIssue[] = error.issues.map((issue) => {
@@ -141,6 +155,9 @@ export function formatEnvError(error: z.ZodError): string {
 /**
  * Wraps a `ZodError` in an {@link EnvValidationError} whose message is
  * the formatted output of {@link formatEnvError}.
+ *
+ * Internal: exported only so `create-env.ts` can call it. Not part of
+ * the package's public API surface — see `src/index.ts`.
  */
 export function toEnvValidationError(error: z.ZodError): EnvValidationError {
   const issues: EnvIssue[] = error.issues.map((issue) => {

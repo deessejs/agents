@@ -4,10 +4,10 @@
  * The throttling plugin requires `onRateLimit` and `onSecondaryRateLimit`
  * callbacks at construction time. We verify the defaults behave correctly.
  */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EndpointDefaults } from "@octokit/types";
 
-import { defaultThrottleHandlers } from "../src/throttle.js";
+import { __resetSecondaryRetryForTests, defaultThrottleHandlers } from "../src/throttle.js";
 
 function fakeOptions(): Required<EndpointDefaults> {
   return {
@@ -23,6 +23,10 @@ function fakeOptions(): Required<EndpointDefaults> {
 }
 
 describe("defaultThrottleHandlers", () => {
+  beforeEach(() => {
+    __resetSecondaryRetryForTests();
+  });
+
   it("onRateLimit retries when retryCount < 3", () => {
     const logger = { warn: vi.fn() };
     const handlers = defaultThrottleHandlers({ logger });
@@ -77,5 +81,27 @@ describe("defaultThrottleHandlers", () => {
     const handlers = defaultThrottleHandlers();
     // Should not throw — noop logger swallows the message.
     expect(() => handlers.onRateLimit(60, fakeOptions(), {} as never, 0)).not.toThrow();
+  });
+
+  it("onSecondaryRateLimit gives up after the secondary retry cap", () => {
+    const logger = { warn: vi.fn() };
+    const handlers = defaultThrottleHandlers({ logger, secondaryMaxRetries: 2 });
+    const opts = fakeOptions();
+    // 3 calls under the cap: 1, 2 → retry; 3 → bail.
+    expect(handlers.onSecondaryRateLimit(60, opts, {} as never)).toBe(true);
+    expect(handlers.onSecondaryRateLimit(60, opts, {} as never)).toBe(true);
+    expect(handlers.onSecondaryRateLimit(60, opts, {} as never)).toBe(false);
+  });
+
+  it("onSecondaryRateLimit retry count is scoped per (method, url) key", () => {
+    const logger = { warn: vi.fn() };
+    const handlers = defaultThrottleHandlers({ logger, secondaryMaxRetries: 1 });
+    const optsA: Required<EndpointDefaults> = { ...fakeOptions(), url: "/a" };
+    const optsB: Required<EndpointDefaults> = { ...fakeOptions(), url: "/b" };
+    // Burn the budget for /a.
+    expect(handlers.onSecondaryRateLimit(60, optsA, {} as never)).toBe(true);
+    expect(handlers.onSecondaryRateLimit(60, optsA, {} as never)).toBe(false);
+    // /b is a fresh key — still under the cap.
+    expect(handlers.onSecondaryRateLimit(60, optsB, {} as never)).toBe(true);
   });
 });

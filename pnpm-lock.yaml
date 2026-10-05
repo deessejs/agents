@@ -142,12 +142,15 @@ importers:
         specifier: 'catalog:'
         version: 4.6.5
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.5
       '@workspace/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       vitest:
         specifier: 'catalog:'
-        version: 2.1.9(@types/node@26.6.4)
+        version: 2.1.9(@types/node@22.20.5)
 
   packages/llm:
     dependencies:
@@ -167,12 +170,15 @@ importers:
         specifier: 'catalog:'
         version: 4.6.5
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.5
       '@workspace/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       vitest:
         specifier: 'catalog:'
-        version: 2.1.9(@types/node@26.6.4)
+        version: 2.1.9(@types/node@22.20.5)
 
   packages/observability:
     dependencies:
@@ -201,12 +207,15 @@ importers:
         specifier: 'catalog:'
         version: 4.6.5
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.5
       '@workspace/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       vitest:
         specifier: 'catalog:'
-        version: 2.1.9(@types/node@26.6.4)
+        version: 2.1.9(@types/node@22.20.5)
 
   packages/oxlint-config: {}
 

@@ -82,4 +82,36 @@ describe("redact values", () => {
     expect(text).toContain(original);
     expect(text).not.toContain("[REDACTED]");
   });
+
+  it("redact path + value-walker do not double-wrap an already-redacted value", () => {
+    // Edge case: a field whose key matches a redact path contains a JWT.
+    // The value-walker should redact the JWT first (since it runs in
+    // formatters.log before pino's redact pass on serialize). When pino's
+    // redact replaces the whole value, it should land as "[REDACTED]" —
+    // not "[REDACTED][REDACTED]" or some other double-wrapped string.
+    const { logger, records } = makeCapturingLogger({ agent: "agent-test" });
+    const jwt = "eyJabcdefgh.eyJabcdefgh.eyJabcdefgh";
+    logger.info("with-jwt", {
+      headers: { authorization: `Bearer ${jwt}` },
+      nested: { bearer_header: `Bearer ${jwt}` },
+    });
+    const captured = records() as Array<Record<string, unknown>>;
+    const headers = captured[0]?.headers as Record<string, unknown>;
+    // Path-based redact must fully replace the value (single [REDACTED]).
+    expect(headers.authorization).toBe("[REDACTED]");
+    const nested = captured[0]?.nested as Record<string, unknown>;
+    // No path rule for `bearer_header` — value-walker redaction applies,
+    // preserving the "Bearer " prefix.
+    expect(nested.bearer_header).toBe("Bearer [REDACTED]");
+  });
+
+  it("redacts JWTs (eyJ….*.*) anywhere in a string", () => {
+    const { logger, records } = makeCapturingLogger({ agent: "agent-test" });
+    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+    logger.info("jwt-in-message", { message: `signed with ${jwt} today` });
+    const captured = records() as Array<Record<string, unknown>>;
+    const text = JSON.stringify(captured[0]);
+    expect(text).not.toContain("eyJ");
+    expect(text).toContain("[REDACTED]");
+  });
 });

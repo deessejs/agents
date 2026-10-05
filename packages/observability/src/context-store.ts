@@ -4,6 +4,9 @@
  * We expose a single module-level store rather than instantiating one per call
  * site so that `withAgentContext` always finds the active context regardless of
  * where in the call stack a logger is built.
+ *
+ * The store itself is intentionally NOT re-exported from the package entry —
+ * only `getActiveContext` is part of the public surface.
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -19,7 +22,12 @@ export interface ContextStoreValue {
   raw: AgentContext;
 }
 
-export const agentContextStorage = new AsyncLocalStorage<ContextStoreValue>();
+/**
+ * Module-level store. `withAgentContext` writes here; `wrapPino` reads via
+ * {@link getActiveContext}. Kept module-private — callers must use
+ * `withAgentContext` rather than manipulating the store directly.
+ */
+const agentContextStorage = new AsyncLocalStorage<ContextStoreValue>();
 
 /**
  * Read the currently active context, or `undefined` if no
@@ -27,4 +35,15 @@ export const agentContextStorage = new AsyncLocalStorage<ContextStoreValue>();
  */
 export function getActiveContext(): AgentContext | undefined {
   return agentContextStorage.getStore()?.raw;
+}
+
+/**
+ * Internal helper used by `withAgentContext` to enter a scoped context. Not
+ * re-exported — the package public API uses `withAgentContext` instead.
+ */
+export function runInAgentContext<T>(
+  storeValue: ContextStoreValue,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return agentContextStorage.run(storeValue, fn);
 }

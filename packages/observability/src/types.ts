@@ -5,19 +5,46 @@
  * from `src/index.ts`.
  */
 
+import type { LevelName } from "./levels.ts";
+
+/**
+ * Signature shared by every level method on {@link Logger}. Each level takes
+ * a human-readable message and an optional structured-fields bag.
+ */
+export type LogFn = (msg: string, fields?: Record<string, unknown>) => void;
+
 /**
  * A structured JSON logger that mirrors the pino level API but is independent
  * of the pino runtime type so callers can swap implementations if needed.
+ *
+ * Built from a mapped type over {@link LevelName} so adding a new level
+ * requires editing one constant, not six method declarations.
  */
-export interface Logger {
-  trace(msg: string, fields?: Record<string, unknown>): void;
-  debug(msg: string, fields?: Record<string, unknown>): void;
-  info(msg: string, fields?: Record<string, unknown>): void;
-  warn(msg: string, fields?: Record<string, unknown>): void;
-  error(msg: string, fields?: Record<string, unknown>): void;
-  fatal(msg: string, fields?: Record<string, unknown>): void;
+export type Logger = { [K in LevelName]: LogFn } & {
   /** Create a sub-logger that pre-applies the given fields to every log line. */
   child(fields: Record<string, unknown>): Logger;
+};
+
+/**
+ * OpenTelemetry GenAI semantic convention fields attached to every log
+ * line / span emitted while the parent {@link AgentContext} is active.
+ *
+ * Optional — callers (typically `@workspace/llm`) populate this when an LLM
+ * is invoked so the resulting spans match the OTel GenAI dashboard templates.
+ */
+export interface GenaiContext {
+  /** Provider identifier (e.g. `"anthropic"`, `"openai"`). */
+  provider?: string;
+  /** Logical operation (e.g. `"chat"`, `"embedding"`). */
+  operation?: string;
+  /** Model identifier (e.g. `"claude-sonnet-4-5"`). */
+  model?: string;
+  /** Tokens consumed by the request. */
+  input_tokens?: number;
+  /** Tokens produced by the response. */
+  output_tokens?: number;
+  /** Why the model stopped generating (e.g. `"end_turn"`, `"max_tokens"`). */
+  finish_reasons?: string[];
 }
 
 /**
@@ -36,8 +63,10 @@ export interface AgentContext {
   channel?: string;
   /** Parent agent when this run was spawned by another agent. */
   correlation_parent_agent?: string;
-  /** Arbitrary additional context fields. */
-  [key: string]: unknown;
+  /** OpenTelemetry GenAI semantic conventions for any LLM call inside this run. */
+  genai?: GenaiContext;
+  /** Arbitrary additional scalar context fields. Use sparingly — prefer typed keys. */
+  extra?: Record<string, string | number | boolean>;
 }
 
 /**
@@ -50,10 +79,11 @@ export interface LoggerConfig {
   /** Deployment environment, typically `process.env.NODE_ENV`. */
   env?: string;
   /**
-   * Pino level string. Defaults to the `LOG_LEVEL` environment variable, or
-   * `"info"` if neither is set.
+   * Pino level string. Caller responsibility — typically the value of
+   * `env.LOG_LEVEL` parsed via `@workspace/env/schemas/base`. Defaults to
+   * `"info"` when omitted.
    */
-  level?: string;
+  level?: LevelName | string;
   /**
    * Additional pino redact paths merged on top of {@link DEFAULT_REDACT_PATHS}.
    * Use for header names / env var keys that the defaults miss.

@@ -4,18 +4,21 @@
  * Reference: <https://docs.github.com/en/rest/pulls/reviews#get-a-review-for-a-pull-request>.
  */
 import { z } from "zod";
-import { UserSchema } from "./user.js";
+
+import { NullableIsoDateTimeSchema } from "./datetime.ts";
+import { GitHubHtmlUrlSchema } from "./url.ts";
+import { UserSchema } from "./user.ts";
 
 export const ReviewSchema = z
   .object({
-    id: z.number().int(),
+    id: z.number().int().positive(),
     user: UserSchema.nullable(),
-    body: z.string().nullable(),
+    body: z.string().max(65_536).nullable(),
     state: z.enum(["APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED", "PENDING"]),
-    submitted_at: z.string().nullable(),
-    commit_id: z.string(),
-    html_url: z.string(),
+    submitted_at: NullableIsoDateTimeSchema,
+    commit_id: z.string().min(40).max(40),
+    html_url: GitHubHtmlUrlSchema,
   })
-  .strict();
+  .passthrough();
 
 export type Review = z.infer<typeof ReviewSchema>;

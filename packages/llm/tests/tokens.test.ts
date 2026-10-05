@@ -27,4 +27,13 @@ describe("countTokens", () => {
     // The runtime is exercised by the surrounding describe(); the type
     // check above is the explicit signal.
   });
+
+  it("handles unicode (emoji and CJK) without crashing", () => {
+    const emoji = countTokens("hello 🚀🌟✨ world");
+    const cjk = countTokens("日本語のテキストをカウントするテストです");
+    const mixed = countTokens("Hello 世界 🌍");
+    expect(emoji).toBeGreaterThan(0);
+    expect(cjk).toBeGreaterThan(0);
+    expect(mixed).toBeGreaterThan(0);
+  });
 });

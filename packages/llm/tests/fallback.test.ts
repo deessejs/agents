@@ -28,15 +28,16 @@ describe("withFallback", () => {
   });
 
   it("rethrows the last error when every resolver fails retryably", async () => {
+    const last = new Error("503 service unavailable (3)");
     const primary = async () => {
       throw new Error("503 service unavailable (1)");
     };
     const middle = async () => {
       throw new Error("503 service unavailable (2)");
     };
-    const last = async () => {
-      throw new Error("503 service unavailable (3)");
+    const lastThunk = async () => {
+      throw last;
     };
-    await expect(withFallback(primary, middle, last)).rejects.toThrow("(3)");
+    await expect(withFallback(primary, middle, lastThunk)).rejects.toBe(last);
   });
 });

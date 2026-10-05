@@ -28,8 +28,20 @@ export const DEFAULT_VALUE_PATTERNS: ValuePattern[] = [
   // Capture the "Bearer " prefix so the redacted value still reads as a
   // bearer auth header.
   { name: "bearer", re: /(Bearer\s+)[a-zA-Z0-9\-._~+/=]+/g },
+  // JWT — three base64url segments separated by dots. Anchored loosely so
+  // partial matches inside larger strings still trigger redaction.
+  { name: "jwt", re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g },
   { name: "email_pii", re: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g },
 ];
+
+/**
+ * Type predicate: is `value` a plain object (not `null`, not an array)?
+ *
+ * Used by {@link walk} to recurse safely without runtime casts.
+ */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 
 /**
  * Recursively walk `input`, replacing any string value that matches one of
@@ -62,9 +74,9 @@ export function walk(input: unknown, patterns: ValuePattern[] = DEFAULT_VALUE_PA
   if (Array.isArray(input)) {
     return input.map((value) => walk(value, patterns));
   }
-  if (input !== null && typeof input === "object") {
+  if (isPlainObject(input)) {
     const out: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(input)) {
       out[key] = walk(value, patterns);
     }
     return out;

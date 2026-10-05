@@ -6,17 +6,18 @@
  * access to the source repo — we make it optional for that reason.
  */
 import { z } from "zod";
-import { UserSchema } from "./user.js";
-import { RepoSchema } from "./repo.js";
+
+import { RepoSchema } from "./repo.ts";
+import { UserSchema } from "./user.ts";
 
 export const RefSchema = z
   .object({
-    label: z.string(),
-    ref: z.string(),
-    sha: z.string(),
+    label: z.string().min(1).max(255),
+    ref: z.string().min(1).max(255),
+    sha: z.string().regex(/^[0-9a-f]{40}$/, "sha must be a 40-char hex git SHA"),
     user: UserSchema.nullable(),
     repo: RepoSchema.optional(),
   })
-  .strict();
+  .passthrough();
 
 export type Ref = z.infer<typeof RefSchema>;

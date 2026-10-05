@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import type { Octokit } from "@octokit/core";
 
-import { getOpenIssues, getClosedIssues } from "../src/api/issues.js";
+import { getOpenIssues, getClosedIssues, getIssueTimeline } from "../src/api/issues.js";
 import issuesFixture from "./fixtures/issues.json";
 
 function fakeOctokit(pages: unknown[][]): Octokit {
@@ -68,5 +68,34 @@ describe("getClosedIssues", () => {
     expect(issues).toHaveLength(3);
     expect(issues[1]?.state).toBe("closed");
     expect(issues[1]?.state_reason).toBe("completed");
+  });
+});
+
+describe("getIssueTimeline", () => {
+  it("returns timeline events for the given issue", async () => {
+    const timelineEvents = [
+      { event: "labeled", label: { name: "bug" }, created_at: "2026-10-04T10:00:00Z" },
+      { event: "assigned", assignee: { login: "octocat" }, created_at: "2026-10-04T10:01:00Z" },
+      { event: "closed", created_at: "2026-10-04T10:30:00Z" },
+    ];
+    const octokit = fakeOctokit([timelineEvents]);
+    const events = await getIssueTimeline(octokit, {
+      owner: "octocat",
+      repo: "agents",
+      issue_number: 101,
+    });
+    expect(events).toHaveLength(3);
+    expect((events[0] as { event: string }).event).toBe("labeled");
+    expect((events[2] as { event: string }).event).toBe("closed");
+  });
+
+  it("returns [] when the timeline is empty", async () => {
+    const octokit = fakeOctokit([[]]);
+    const events = await getIssueTimeline(octokit, {
+      owner: "octocat",
+      repo: "agents",
+      issue_number: 101,
+    });
+    expect(events).toEqual([]);
   });
 });

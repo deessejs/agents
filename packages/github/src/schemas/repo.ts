@@ -1,23 +1,38 @@
 /**
  * Zod schema for a GitHub repository.
  *
- * Only the fields our agents actually read are included. Other fields
- * (e.g. `permissions`, `topics`) are stripped by `.strict()` so we notice
- * if downstream code depends on something we forgot to declare.
+ * Only the fields our agents actually read are included. `.passthrough()`
+ * keeps any extra fields GitHub adds (e.g. `permissions`, `topics`) in
+ * the parsed object so forward-compat work doesn't need a schema bump.
  */
 import { z } from "zod";
-import { UserSchema } from "./user.js";
+
+import { GitHubHtmlUrlSchema } from "./url.ts";
+import { UserSchema } from "./user.ts";
+
+/**
+ * Git ref name — anchored so it rejects `..` and most control characters.
+ * Git itself accepts a slightly wider range (including `*` for refspecs),
+ * but for `default_branch` we want a plain branch name only.
+ */
+const BranchNameSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .regex(/^(?!.*\.\.)[A-Za-z0-9._/-]+$/, {
+    message: "default_branch must be a valid git ref name",
+  });
 
 export const RepoSchema = z
   .object({
-    id: z.number().int(),
-    name: z.string(),
-    full_name: z.string(),
+    id: z.number().int().positive(),
+    name: z.string().min(1).max(100),
+    full_name: z.string().min(3).max(200),
     private: z.boolean(),
-    html_url: z.string(),
-    default_branch: z.string(),
+    html_url: GitHubHtmlUrlSchema,
+    default_branch: BranchNameSchema,
     owner: UserSchema,
   })
-  .strict();
+  .passthrough();
 
 export type Repo = z.infer<typeof RepoSchema>;

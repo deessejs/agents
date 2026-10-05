@@ -23,7 +23,9 @@ const ANTHROPIC_CACHE_CONTROL = {
  */
 export function withCachedSystemMessage(message: SystemModelMessage): SystemModelMessage {
   const existingOptions = message.providerOptions ?? {};
-  const existingAnthropic = (existingOptions.anthropic ?? {}) as Record<string, unknown>;
+  const recordExistingAnthropic = existingOptions.anthropic;
+  const existingAnthropic =
+    recordExistingAnthropic !== undefined ? { ...recordExistingAnthropic } : {};
   return {
     ...message,
     providerOptions: {
@@ -37,15 +39,28 @@ export function withCachedSystemMessage(message: SystemModelMessage): SystemMode
 }
 
 /**
- * Wrap a string instructions value into a `SystemModelMessage` with an
- * Anthropic cache breakpoint attached.
+ * Wrap an instructions value into a `SystemModelMessage` (or array)
+ * with an Anthropic cache breakpoint attached.
  *
  * The AI SDK's `instructions` (formerly `system`) field accepts
- * `string | SystemModelMessage | Array<SystemModelMessage>`; passing a
+ * `string | SystemModelMessage | SystemModelMessage[]`; passing a
  * structured message is the supported way to attach provider-specific
- * options such as the cache directive.
+ * options such as the cache directive. This helper accepts the same
+ * union, maps array inputs element-wise, and otherwise delegates to
+ * {@link withCachedSystemMessage}.
+ *
+ * @example
+ * ```ts
+ * import { withCaching } from "@workspace/llm";
+ *
+ * const instructions = withCaching("You are a helpful assistant.");
+ * // instructions.providerOptions.anthropic.cacheControl is set.
+ * ```
  */
-export function withCaching(input: string | SystemModelMessage): SystemModelMessage {
+export function withCaching(input: Instructions): SystemModelMessage | SystemModelMessage[] {
+  if (Array.isArray(input)) {
+    return input.map((msg) => withCachedSystemMessage(msg));
+  }
   if (typeof input === "string") {
     return {
       role: "system",
@@ -56,17 +71,4 @@ export function withCaching(input: string | SystemModelMessage): SystemModelMess
     };
   }
   return withCachedSystemMessage(input);
-}
-
-/**
- * Convenience wrapper around {@link withCaching} that accepts the full
- * `Instructions` union (string | SystemModelMessage | SystemModelMessage[]).
- * Array inputs are mapped element-wise; string inputs are converted via
- * `withCaching`.
- */
-export function withCachingAll(instructions: Instructions): Instructions {
-  if (Array.isArray(instructions)) {
-    return instructions.map((msg) => withCachedSystemMessage(msg));
-  }
-  return withCaching(instructions);
 }

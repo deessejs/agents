@@ -54,4 +54,20 @@ describe("redact paths", () => {
     const headers = captured[0]?.headers as Record<string, unknown>;
     expect(headers["x-request-id"]).toBe("req-9");
   });
+
+  it("redacts the PascalCase 'Authorization' header at any depth", () => {
+    const { logger, records } = makeCapturingLogger({ agent: "agent-test" });
+    logger.info("auth header (PascalCase)", {
+      headers: {
+        Authorization: "Bearer abc.def.ghi",
+        Cookie: "session=xyz",
+        "X-Api-Key": "secret-99",
+      },
+    });
+    const captured = records() as Array<Record<string, unknown>>;
+    const headers = captured[0]?.headers as Record<string, unknown>;
+    expect(headers.Authorization).toBe("[REDACTED]");
+    expect(headers.Cookie).toBe("[REDACTED]");
+    expect(headers["X-Api-Key"]).toBe("[REDACTED]");
+  });
 });
