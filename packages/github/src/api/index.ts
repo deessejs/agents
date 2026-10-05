@@ -1,10 +1,10 @@
 /**
  * Re-exports for the API helpers.
  */
-export * from "./pulls.js";
-export * from "./issues.js";
-export * from "./repos.js";
-export * from "./security.js";
-export * from "./releases.js";
-export * from "./actions.js";
-export * from "./stats.js";
+export * from "./pulls.ts";
+export * from "./issues.ts";
+export * from "./repos.ts";
+export * from "./security.ts";
+export * from "./releases.ts";
+export * from "./actions.ts";
+export * from "./stats.ts";

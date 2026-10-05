@@ -10,7 +10,7 @@ import { LEVELS, type LevelName } from "./levels.ts";
 import { createRedactor } from "./redact/index.ts";
 import type { ValuePattern } from "./redact/values.ts";
 import { STANDARD_TAGS } from "./tags.ts";
-import type { AgentContext, GenaiContext, LogFn, Logger, LoggerConfig } from "./types.ts";
+import type { GenaiContext, LogFn, Logger, LoggerConfig } from "./types.ts";
 
 /**
  * Map of AgentContext fields → canonical tag name. Anything in `ctx` that
@@ -170,5 +170,3 @@ export function createPinoWrapper(config: LoggerConfig): Logger {
   const pinoInstance = buildPinoLogger(config);
   return wrapPino(pinoInstance);
 }
-
-export type { AgentContext, GenaiContext };

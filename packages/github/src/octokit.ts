@@ -9,8 +9,8 @@ import { throttling } from "@octokit/plugin-throttling";
 import { paginateRest } from "@octokit/plugin-paginate-rest";
 import { retry } from "@octokit/plugin-retry";
 
-import { defaultThrottleHandlers } from "./throttle.js";
-import type { GitHubClientConfig } from "./client.js";
+import { defaultThrottleHandlers } from "./throttle.ts";
+import type { GitHubClientConfig } from "./client.ts";
 
 /**
  * The Octokit class composed with our three plugins.

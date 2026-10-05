@@ -6,8 +6,17 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EndpointDefaults } from "@octokit/types";
+import type { Octokit } from "@octokit/core";
 
-import { __resetSecondaryRetryForTests, defaultThrottleHandlers } from "../src/throttle.js";
+import { __resetSecondaryRetryForTests, defaultThrottleHandlers } from "../src/throttle.ts";
+
+/**
+ * Minimal fake Octokit satisfying the `Octokit` shape required by the
+ * throttle handlers — they never call any methods on it, but the type
+ * requires a value. Use `MockOctokit` (declared below) to avoid
+ * `as never` casts in the assertions.
+ */
+const noopOctokit: Octokit = {} as Octokit;
 
 function fakeOptions(): Required<EndpointDefaults> {
   return {
@@ -31,9 +40,9 @@ describe("defaultThrottleHandlers", () => {
     const logger = { warn: vi.fn() };
     const handlers = defaultThrottleHandlers({ logger });
 
-    expect(handlers.onRateLimit(60, fakeOptions(), {} as never, 0)).toBe(true);
-    expect(handlers.onRateLimit(60, fakeOptions(), {} as never, 1)).toBe(true);
-    expect(handlers.onRateLimit(60, fakeOptions(), {} as never, 2)).toBe(true);
+    expect(handlers.onRateLimit(60, fakeOptions(), noopOctokit, 0)).toBe(true);
+    expect(handlers.onRateLimit(60, fakeOptions(), noopOctokit, 1)).toBe(true);
+    expect(handlers.onRateLimit(60, fakeOptions(), noopOctokit, 2)).toBe(true);
     expect(logger.warn).toHaveBeenCalledTimes(3);
   });
 
@@ -42,12 +51,12 @@ describe("defaultThrottleHandlers", () => {
     const handlers = defaultThrottleHandlers({ logger });
 
     // First three calls (retryCount 0..2) succeed and log.
-    expect(handlers.onRateLimit(60, fakeOptions(), {} as never, 0)).toBe(true);
-    expect(handlers.onRateLimit(60, fakeOptions(), {} as never, 1)).toBe(true);
-    expect(handlers.onRateLimit(60, fakeOptions(), {} as never, 2)).toBe(true);
+    expect(handlers.onRateLimit(60, fakeOptions(), noopOctokit, 0)).toBe(true);
+    expect(handlers.onRateLimit(60, fakeOptions(), noopOctokit, 1)).toBe(true);
+    expect(handlers.onRateLimit(60, fakeOptions(), noopOctokit, 2)).toBe(true);
     // Calls beyond the maxRetries (retryCount 3,4) still log but return false.
-    expect(handlers.onRateLimit(60, fakeOptions(), {} as never, 3)).toBe(false);
-    expect(handlers.onRateLimit(60, fakeOptions(), {} as never, 4)).toBe(false);
+    expect(handlers.onRateLimit(60, fakeOptions(), noopOctokit, 3)).toBe(false);
+    expect(handlers.onRateLimit(60, fakeOptions(), noopOctokit, 4)).toBe(false);
     expect(logger.warn).toHaveBeenCalledTimes(5);
   });
 
@@ -55,9 +64,9 @@ describe("defaultThrottleHandlers", () => {
     const logger = { warn: vi.fn() };
     const handlers = defaultThrottleHandlers({ logger });
 
-    expect(handlers.onSecondaryRateLimit(60, fakeOptions(), {} as never)).toBe(true);
-    expect(handlers.onSecondaryRateLimit(60, fakeOptions(), {} as never)).toBe(true);
-    expect(handlers.onSecondaryRateLimit(60, fakeOptions(), {} as never)).toBe(true);
+    expect(handlers.onSecondaryRateLimit(60, fakeOptions(), noopOctokit)).toBe(true);
+    expect(handlers.onSecondaryRateLimit(60, fakeOptions(), noopOctokit)).toBe(true);
+    expect(handlers.onSecondaryRateLimit(60, fakeOptions(), noopOctokit)).toBe(true);
     expect(logger.warn).toHaveBeenCalledTimes(3);
   });
 
@@ -65,22 +74,22 @@ describe("defaultThrottleHandlers", () => {
     const logger = { warn: vi.fn() };
     const handlers = defaultThrottleHandlers({ logger, maxRetries: 1 });
 
-    expect(handlers.onRateLimit(60, fakeOptions(), {} as never, 0)).toBe(true);
-    expect(handlers.onRateLimit(60, fakeOptions(), {} as never, 1)).toBe(false);
+    expect(handlers.onRateLimit(60, fakeOptions(), noopOctokit, 0)).toBe(true);
+    expect(handlers.onRateLimit(60, fakeOptions(), noopOctokit, 1)).toBe(false);
   });
 
   it("uses provided logger when configured", () => {
     const logger = { warn: vi.fn() };
     const handlers = defaultThrottleHandlers({ logger });
 
-    handlers.onRateLimit(60, fakeOptions(), {} as never, 0);
+    handlers.onRateLimit(60, fakeOptions(), noopOctokit, 0);
     expect(logger.warn).toHaveBeenCalled();
   });
 
   it("default logger is a no-op when none is configured", () => {
     const handlers = defaultThrottleHandlers();
     // Should not throw — noop logger swallows the message.
-    expect(() => handlers.onRateLimit(60, fakeOptions(), {} as never, 0)).not.toThrow();
+    expect(() => handlers.onRateLimit(60, fakeOptions(), noopOctokit, 0)).not.toThrow();
   });
 
   it("onSecondaryRateLimit gives up after the secondary retry cap", () => {
@@ -88,9 +97,9 @@ describe("defaultThrottleHandlers", () => {
     const handlers = defaultThrottleHandlers({ logger, secondaryMaxRetries: 2 });
     const opts = fakeOptions();
     // 3 calls under the cap: 1, 2 → retry; 3 → bail.
-    expect(handlers.onSecondaryRateLimit(60, opts, {} as never)).toBe(true);
-    expect(handlers.onSecondaryRateLimit(60, opts, {} as never)).toBe(true);
-    expect(handlers.onSecondaryRateLimit(60, opts, {} as never)).toBe(false);
+    expect(handlers.onSecondaryRateLimit(60, opts, noopOctokit)).toBe(true);
+    expect(handlers.onSecondaryRateLimit(60, opts, noopOctokit)).toBe(true);
+    expect(handlers.onSecondaryRateLimit(60, opts, noopOctokit)).toBe(false);
   });
 
   it("onSecondaryRateLimit retry count is scoped per (method, url) key", () => {
@@ -99,9 +108,9 @@ describe("defaultThrottleHandlers", () => {
     const optsA: Required<EndpointDefaults> = { ...fakeOptions(), url: "/a" };
     const optsB: Required<EndpointDefaults> = { ...fakeOptions(), url: "/b" };
     // Burn the budget for /a.
-    expect(handlers.onSecondaryRateLimit(60, optsA, {} as never)).toBe(true);
-    expect(handlers.onSecondaryRateLimit(60, optsA, {} as never)).toBe(false);
+    expect(handlers.onSecondaryRateLimit(60, optsA, noopOctokit)).toBe(true);
+    expect(handlers.onSecondaryRateLimit(60, optsA, noopOctokit)).toBe(false);
     // /b is a fresh key — still under the cap.
-    expect(handlers.onSecondaryRateLimit(60, optsB, {} as never)).toBe(true);
+    expect(handlers.onSecondaryRateLimit(60, optsB, noopOctokit)).toBe(true);
   });
 });

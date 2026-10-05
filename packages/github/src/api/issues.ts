@@ -7,8 +7,9 @@
  */
 import type { Octokit } from "@octokit/core";
 
-import { paginateAll } from "../pagination.js";
-import { IssueSchema, type Issue } from "../schemas/issue.js";
+import { paginateAll } from "../pagination.ts";
+import { IssueSchema, type Issue } from "../schemas/issue.ts";
+import { parseTimelineEvent, type TimelineEvent } from "../schemas/timeline-event.ts";
 
 export interface GetOpenIssuesOpts {
   org: string;
@@ -52,6 +53,7 @@ export async function getOpenIssues(octokit: Octokit, opts: GetOpenIssuesOpts): 
           per_page: 100,
         },
     { max: opts.max ?? 1000 },
+    (raw): RawIssue => raw as RawIssue,
   );
 
   // The search endpoint already filters out PRs, but the repo endpoint
@@ -98,6 +100,7 @@ export async function getClosedIssues(
           per_page: 100,
         },
     { max: opts.max ?? 1000 },
+    (raw): RawIssue => raw as RawIssue,
   );
 
   return rows.filter((r) => r.pull_request === undefined).map((r) => IssueSchema.parse(r));
@@ -110,14 +113,32 @@ export interface GetIssueTimelineOpts {
   max?: number;
 }
 
+/**
+ * List timeline events for an issue, parsed through
+ * {@link TimelineEventSchema}. The endpoint returns a heterogeneous mix
+ * of `labeled`, `assigned`, `closed`, `commented`, etc. — the schema
+ * models the common ones as a discriminated union and keeps the rest
+ * via a passthrough fallback.
+ *
+ * @example
+ * ```ts
+ * const events = await getIssueTimeline(gh, {
+ *   owner: "octocat",
+ *   repo: "agents",
+ *   issue_number: 101,
+ * });
+ * const labeled = events.filter((e) => e.event === "labeled");
+ * ```
+ */
 export async function getIssueTimeline(
   octokit: Octokit,
   opts: GetIssueTimelineOpts,
-): Promise<unknown[]> {
-  return paginateAll<unknown>(
+): Promise<TimelineEvent[]> {
+  return paginateAll<TimelineEvent>(
     octokit,
     "GET /repos/{owner}/{repo}/issues/{issue_number}/timeline",
     { owner: opts.owner, repo: opts.repo, issue_number: opts.issue_number },
     { max: opts.max ?? 1000 },
+    parseTimelineEvent,
   );
 }

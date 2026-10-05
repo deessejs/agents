@@ -10,13 +10,13 @@ export {
   type GitHubClient,
   type GitHubClientConfig,
   type RateLimitInfo,
-} from "./client.js";
+} from "./client.ts";
 
 export {
   defaultThrottleHandlers,
   type ThrottleHandlers,
   type RateLimitHandler,
   type SecondaryRateLimitHandler,
-} from "./throttle.js";
+} from "./throttle.ts";
 
-export { paginateAll, type PaginateAllOptions } from "./pagination.js";
+export { paginateAll, type PaginateAllOptions } from "./pagination.ts";

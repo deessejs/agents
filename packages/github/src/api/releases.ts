@@ -3,8 +3,8 @@
  */
 import type { Octokit } from "@octokit/core";
 
-import { paginateAll } from "../pagination.js";
-import { ReleaseSchema, type Release } from "../schemas/release.js";
+import { paginateAll } from "../pagination.ts";
+import { ReleaseSchema, type Release } from "../schemas/release.ts";
 
 export interface GetReleasesOpts {
   owner: string;

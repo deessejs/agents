@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 
-import { PullRequestSchema, type PullRequest } from "../src/schemas/pull-request.js";
+import { PullRequestSchema, type PullRequest } from "../src/schemas/pull-request.ts";
 import pullRequestsFixture from "./fixtures/pull-requests.json";
 
 describe("PullRequestSchema", () => {

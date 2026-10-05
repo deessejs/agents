@@ -1,35 +1,15 @@
 /**
  * Tests for the `pulls` API helpers.
  */
-import { describe, expect, it, vi } from "vitest";
-import type { Octokit } from "@octokit/core";
+import { describe, expect, it } from "vitest";
 
-import { getMergedPRs, getOpenPRs } from "../src/api/pulls.js";
+import { getMergedPRs, getOpenPRs } from "../src/api/pulls.ts";
 import pullRequestsFixture from "./fixtures/pull-requests.json";
-
-interface FakePage<T> {
-  data: T[];
-}
-
-function fakeOctokit(pages: unknown[][]): {
-  octokit: Octokit;
-  iteratorSpy: ReturnType<typeof vi.fn>;
-} {
-  const iteratorSpy = vi.fn(async function* () {
-    for (const page of pages) {
-      yield { data: page } as FakePage<unknown>;
-    }
-  });
-  const octokit = {
-    paginate: { iterator: iteratorSpy },
-    request: vi.fn(),
-  } as unknown as Octokit;
-  return { octokit, iteratorSpy };
-}
+import { makeFakeOctokit } from "./helpers/fake-octokit.ts";
 
 describe("getMergedPRs", () => {
   it("returns parsed PRs from the search endpoint", async () => {
-    const { octokit } = fakeOctokit([pullRequestsFixture]);
+    const { octokit } = makeFakeOctokit(pullRequestsFixture);
 
     const prs = await getMergedPRs(octokit, {
       org: "octocat",
@@ -43,7 +23,7 @@ describe("getMergedPRs", () => {
   });
 
   it("uses the search route when no repo is provided", async () => {
-    const { octokit, iteratorSpy } = fakeOctokit([pullRequestsFixture]);
+    const { octokit, iteratorSpy } = makeFakeOctokit(pullRequestsFixture);
     await getMergedPRs(octokit, {
       org: "octocat",
       since: "2026-09-01T00:00:00Z",
@@ -55,7 +35,7 @@ describe("getMergedPRs", () => {
   });
 
   it("uses the repo-scoped pulls route when repo is provided", async () => {
-    const { octokit, iteratorSpy } = fakeOctokit([pullRequestsFixture]);
+    const { octokit, iteratorSpy } = makeFakeOctokit(pullRequestsFixture);
     await getMergedPRs(octokit, {
       org: "octocat",
       repo: "agents",
@@ -70,18 +50,20 @@ describe("getMergedPRs", () => {
   });
 
   it("applies the author filter via the search query", async () => {
-    const { octokit, iteratorSpy } = fakeOctokit([pullRequestsFixture]);
+    const { octokit, iteratorSpy } = makeFakeOctokit(pullRequestsFixture);
     await getMergedPRs(octokit, {
       org: "octocat",
       author: "hubot",
       since: "2026-09-01T00:00:00Z",
     });
-    const [, params] = iteratorSpy.mock.calls[0] as [string, { q: string }];
+    const call = iteratorSpy.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, params] = call as [string, { q: string }];
     expect(params.q).toContain("author:hubot");
   });
 
   it("returns [] when the search returns no results", async () => {
-    const { octokit } = fakeOctokit([[]]);
+    const { octokit } = makeFakeOctokit([]);
     const prs = await getMergedPRs(octokit, {
       org: "octocat",
       since: "2020-01-01T00:00:00Z",
@@ -92,7 +74,7 @@ describe("getMergedPRs", () => {
 
 describe("getOpenPRs", () => {
   it("returns open PRs from the repo endpoint", async () => {
-    const { octokit } = fakeOctokit([pullRequestsFixture]);
+    const { octokit } = makeFakeOctokit(pullRequestsFixture);
     const prs = await getOpenPRs(octokit, {
       org: "octocat",
       repo: "agents",
@@ -101,13 +83,23 @@ describe("getOpenPRs", () => {
     expect(prs.every((p) => p.state === "open" || p.state === "closed")).toBe(true);
   });
 
+  it("uses the search route when no repo is provided", async () => {
+    const { octokit, iteratorSpy } = makeFakeOctokit(pullRequestsFixture);
+    await getOpenPRs(octokit, { org: "octocat" });
+    expect(iteratorSpy).toHaveBeenCalledWith(
+      "GET /search/issues",
+      expect.objectContaining({
+        q: expect.stringMatching(/^is:pr is:open org:octocat/),
+      }),
+    );
+  });
+
   it("applies the author filter via the search query", async () => {
-    const { octokit, iteratorSpy } = fakeOctokit([pullRequestsFixture]);
-    await getOpenPRs(octokit, {
-      org: "octocat",
-      author: "hubot",
-    });
-    const [, params] = iteratorSpy.mock.calls[0] as [string, { q: string }];
+    const { octokit, iteratorSpy } = makeFakeOctokit(pullRequestsFixture);
+    await getOpenPRs(octokit, { org: "octocat", author: "hubot" });
+    const call = iteratorSpy.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, params] = call as [string, { q: string }];
     expect(params.q).toContain("author:hubot");
   });
 });

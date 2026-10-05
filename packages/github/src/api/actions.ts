@@ -3,8 +3,8 @@
  */
 import type { Octokit } from "@octokit/core";
 
-import { paginateAll } from "../pagination.js";
-import { WorkflowRunSchema, type WorkflowRun } from "../schemas/workflow-run.js";
+import { paginateAll } from "../pagination.ts";
+import { WorkflowRunSchema, type WorkflowRun } from "../schemas/workflow-run.ts";
 
 export interface GetWorkflowRunsOpts {
   owner: string;

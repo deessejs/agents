@@ -12,10 +12,14 @@ import { GitHubHtmlUrlSchema } from "./url.ts";
 import { UserSchema } from "./user.ts";
 
 /**
- * PR mergeability state — GitHub documents five possible values; the API
+ * PR mergeability state — GitHub documents six possible values; the API
  * also returns `null` while it's still computing.
+ *
+ * Refs: <https://docs.github.com/en/rest/pulls/pulls#check-if-a-pull-request-has-been-merged>.
  */
-const MergeableStateSchema = z.enum(["clean", "dirty", "unstable", "draft", "blocked"]).nullable();
+export const MergeableStateSchema = z
+  .enum(["clean", "dirty", "unstable", "draft", "blocked", "behind"])
+  .nullable();
 
 export const PullRequestSchema = z
   .object({
@@ -29,7 +33,7 @@ export const PullRequestSchema = z
     // `mergeable` is null when the repo is being calculated; only set after
     // the mergeability check completes.
     mergeable: z.boolean().nullable().optional(),
-    mergeable_state: z.string().optional(),
+    mergeable_state: MergeableStateSchema.optional(),
     user: UserSchema.nullable(),
     head: RefSchema,
     base: RefSchema,
@@ -47,8 +51,7 @@ export const PullRequestSchema = z
     html_url: GitHubHtmlUrlSchema,
     labels: z.array(LabelSchema),
   })
-  // Re-export the mergeable-state enum for callers that want the type.
   .passthrough();
 
-export { MergeableStateSchema };
 export type PullRequest = z.infer<typeof PullRequestSchema>;
+export type MergeableState = z.infer<typeof MergeableStateSchema>;

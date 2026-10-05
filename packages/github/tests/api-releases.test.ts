@@ -1,26 +1,10 @@
 /**
  * Tests for the `releases` API helpers.
  */
-import { describe, expect, it, vi } from "vitest";
-import type { Octokit } from "@octokit/core";
+import { describe, expect, it } from "vitest";
 
 import { getReleases, getLatestRelease } from "../src/api/releases.ts";
-
-interface FakePage<T> {
-  data: T[];
-}
-
-function fakeOctokit(pages: unknown[][]): Octokit {
-  const iterator = (async function* () {
-    for (const page of pages) {
-      yield { data: page } as FakePage<unknown>;
-    }
-  })();
-  return {
-    paginate: { iterator: () => iterator },
-    request: vi.fn(),
-  } as unknown as Octokit;
-}
+import { makeFakeOctokit, mockRequest } from "./helpers/fake-octokit.ts";
 
 const sampleRelease = {
   id: 9001,
@@ -43,7 +27,7 @@ const sampleRelease = {
 
 describe("getReleases", () => {
   it("returns parsed releases from the repo endpoint", async () => {
-    const octokit = fakeOctokit([[sampleRelease]]);
+    const { octokit } = makeFakeOctokit([sampleRelease as unknown as Record<string, unknown>]);
     const releases = await getReleases(octokit, {
       owner: "octocat",
       repo: "agents",
@@ -53,17 +37,27 @@ describe("getReleases", () => {
   });
 
   it("returns [] when no releases are found", async () => {
-    const octokit = fakeOctokit([[]]);
+    const { octokit } = makeFakeOctokit([]);
     const releases = await getReleases(octokit, { owner: "octocat", repo: "agents" });
     expect(releases).toEqual([]);
+  });
+
+  it("uses the releases endpoint with the expected params", async () => {
+    const { octokit, iteratorSpy } = makeFakeOctokit([
+      sampleRelease as unknown as Record<string, unknown>,
+    ]);
+    await getReleases(octokit, { owner: "octocat", repo: "agents" });
+    expect(iteratorSpy).toHaveBeenCalledWith(
+      "GET /repos/{owner}/{repo}/releases",
+      expect.objectContaining({ owner: "octocat", repo: "agents" }),
+    );
   });
 });
 
 describe("getLatestRelease", () => {
   it("returns the latest release", async () => {
-    const octokit = {
-      request: vi.fn().mockResolvedValue({ data: sampleRelease }),
-    } as unknown as Octokit;
+    const { octokit, requestSpy } = makeFakeOctokit();
+    mockRequest(requestSpy, { data: sampleRelease });
     const release = await getLatestRelease(octokit, { owner: "octocat", repo: "agents" });
     expect(release.tag_name).toBe("v1.2.3");
     expect(release.author.login).toBe("octocat");

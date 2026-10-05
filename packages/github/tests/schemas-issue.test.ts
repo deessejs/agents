@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 
-import { IssueSchema, type Issue } from "../src/schemas/issue.js";
+import { IssueSchema, type Issue } from "../src/schemas/issue.ts";
 import issuesFixture from "./fixtures/issues.json";
 
 describe("IssueSchema", () => {

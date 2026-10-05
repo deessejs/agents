@@ -2,27 +2,14 @@
  * Tests for the `issues` API helpers.
  */
 import { describe, expect, it } from "vitest";
-import type { Octokit } from "@octokit/core";
 
-import { getOpenIssues, getClosedIssues, getIssueTimeline } from "../src/api/issues.js";
+import { getOpenIssues, getClosedIssues, getIssueTimeline } from "../src/api/issues.ts";
 import issuesFixture from "./fixtures/issues.json";
-
-function fakeOctokit(pages: unknown[][]): Octokit {
-  const iterator = (async function* () {
-    for (const page of pages) {
-      yield { data: page } as never;
-    }
-  })();
-
-  return {
-    paginate: { iterator: () => iterator },
-    request: () => Promise.resolve({ data: {} } as never),
-  } as unknown as Octokit;
-}
+import { makeFakeOctokit } from "./helpers/fake-octokit.ts";
 
 describe("getOpenIssues", () => {
   it("returns parsed issues from the repo endpoint", async () => {
-    const octokit = fakeOctokit([issuesFixture]);
+    const { octokit } = makeFakeOctokit(issuesFixture);
 
     const issues = await getOpenIssues(octokit, {
       org: "octocat",
@@ -36,6 +23,26 @@ describe("getOpenIssues", () => {
     expect(issues[0]?.labels[0]?.name).toBe("bug");
   });
 
+  it("uses the search route when no repo is provided", async () => {
+    const { octokit, iteratorSpy } = makeFakeOctokit(issuesFixture);
+    await getOpenIssues(octokit, { org: "octocat" });
+    expect(iteratorSpy).toHaveBeenCalledWith(
+      "GET /search/issues",
+      expect.objectContaining({
+        q: expect.stringMatching(/^is:issue is:open org:octocat/),
+      }),
+    );
+  });
+
+  it("applies the author filter via the search query", async () => {
+    const { octokit, iteratorSpy } = makeFakeOctokit(issuesFixture);
+    await getOpenIssues(octokit, { org: "octocat", author: "hubot" });
+    const call = iteratorSpy.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, params] = call as [string, { q: string }];
+    expect(params.q).toContain("author:hubot");
+  });
+
   it("filters PRs (entries with pull_request field) out", async () => {
     const mixed = [
       ...issuesFixture,
@@ -45,8 +52,7 @@ describe("getOpenIssues", () => {
         pull_request: { url: "..." },
       },
     ];
-
-    const octokit = fakeOctokit([mixed]);
+    const { octokit } = makeFakeOctokit(mixed);
     const issues = await getOpenIssues(octokit, {
       org: "octocat",
       repo: "agents",
@@ -59,7 +65,7 @@ describe("getOpenIssues", () => {
 
 describe("getClosedIssues", () => {
   it("returns parsed closed issues", async () => {
-    const octokit = fakeOctokit([issuesFixture]);
+    const { octokit } = makeFakeOctokit(issuesFixture);
     const issues = await getClosedIssues(octokit, {
       org: "octocat",
       repo: "agents",
@@ -69,33 +75,73 @@ describe("getClosedIssues", () => {
     expect(issues[1]?.state).toBe("closed");
     expect(issues[1]?.state_reason).toBe("completed");
   });
+
+  it("uses the search route when no repo is provided", async () => {
+    const { octokit, iteratorSpy } = makeFakeOctokit(issuesFixture);
+    await getClosedIssues(octokit, { org: "octocat", since: "2026-09-01T00:00:00Z" });
+    expect(iteratorSpy).toHaveBeenCalledWith(
+      "GET /search/issues",
+      expect.objectContaining({
+        q: expect.stringMatching(/^is:issue is:closed org:octocat closed:>=2026-09-01/),
+      }),
+    );
+  });
 });
 
 describe("getIssueTimeline", () => {
   it("returns timeline events for the given issue", async () => {
     const timelineEvents = [
-      { event: "labeled", label: { name: "bug" }, created_at: "2026-10-04T10:00:00Z" },
-      { event: "assigned", assignee: { login: "octocat" }, created_at: "2026-10-04T10:01:00Z" },
-      { event: "closed", created_at: "2026-10-04T10:30:00Z" },
+      {
+        id: 1001,
+        event: "labeled",
+        label: { name: "bug", color: "d73a4a" },
+        created_at: "2026-10-04T10:00:00Z",
+      },
+      {
+        id: 1002,
+        event: "assigned",
+        assignee: {
+          login: "octocat",
+          id: 1,
+          avatar_url: "https://avatars.githubusercontent.com/u/1?v=4",
+          html_url: "https://github.com/octocat",
+          type: "User",
+        },
+        created_at: "2026-10-04T10:01:00Z",
+      },
+      { id: 1003, event: "closed", created_at: "2026-10-04T10:30:00Z" },
     ];
-    const octokit = fakeOctokit([timelineEvents]);
+    const { octokit } = makeFakeOctokit(timelineEvents);
     const events = await getIssueTimeline(octokit, {
       owner: "octocat",
       repo: "agents",
       issue_number: 101,
     });
     expect(events).toHaveLength(3);
-    expect((events[0] as { event: string }).event).toBe("labeled");
-    expect((events[2] as { event: string }).event).toBe("closed");
+    expect(events[0]?.event).toBe("labeled");
+    expect(events[2]?.event).toBe("closed");
   });
 
   it("returns [] when the timeline is empty", async () => {
-    const octokit = fakeOctokit([[]]);
+    const { octokit } = makeFakeOctokit([]);
     const events = await getIssueTimeline(octokit, {
       owner: "octocat",
       repo: "agents",
       issue_number: 101,
     });
     expect(events).toEqual([]);
+  });
+
+  it("uses the timeline route with the expected params", async () => {
+    const { octokit, iteratorSpy } = makeFakeOctokit([]);
+    await getIssueTimeline(octokit, {
+      owner: "octocat",
+      repo: "agents",
+      issue_number: 7,
+    });
+    expect(iteratorSpy).toHaveBeenCalledWith(
+      "GET /repos/{owner}/{repo}/issues/{issue_number}/timeline",
+      expect.objectContaining({ owner: "octocat", repo: "agents", issue_number: 7 }),
+    );
   });
 });

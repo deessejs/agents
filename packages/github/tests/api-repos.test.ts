@@ -1,26 +1,10 @@
 /**
  * Tests for the `repos` API helpers.
  */
-import { describe, expect, it, vi } from "vitest";
-import type { Octokit } from "@octokit/core";
+import { describe, expect, it } from "vitest";
 
 import { getOrgRepos, getRepo } from "../src/api/repos.ts";
-
-interface FakePage<T> {
-  data: T[];
-}
-
-function fakeOctokit(pages: unknown[][]): Octokit {
-  const iterator = (async function* () {
-    for (const page of pages) {
-      yield { data: page } as FakePage<unknown>;
-    }
-  })();
-  return {
-    paginate: { iterator: () => iterator },
-    request: vi.fn(),
-  } as unknown as Octokit;
-}
+import { makeFakeOctokit, mockRequest } from "./helpers/fake-octokit.ts";
 
 const sampleRepo = {
   id: 100,
@@ -40,7 +24,7 @@ const sampleRepo = {
 
 describe("getOrgRepos", () => {
   it("returns parsed repos from the org endpoint", async () => {
-    const octokit = fakeOctokit([[sampleRepo]]);
+    const { octokit } = makeFakeOctokit([sampleRepo as unknown as Record<string, unknown>]);
     const repos = await getOrgRepos(octokit, { org: "octocat" });
     expect(repos).toHaveLength(1);
     expect(repos[0]?.name).toBe("agents");
@@ -48,17 +32,44 @@ describe("getOrgRepos", () => {
   });
 
   it("returns [] when no repos match", async () => {
-    const octokit = fakeOctokit([[]]);
+    const { octokit } = makeFakeOctokit([]);
     const repos = await getOrgRepos(octokit, { org: "octocat" });
     expect(repos).toEqual([]);
+  });
+
+  it("forwards the `type` parameter to the org endpoint", async () => {
+    // Exercise all six enum members of the `type` option.
+    const types = ["all", "public", "private", "forks", "sources", "member"] as const;
+    await Promise.all(
+      types.map(async (type) => {
+        const { octokit, iteratorSpy } = makeFakeOctokit([
+          sampleRepo as unknown as Record<string, unknown>,
+        ]);
+        await getOrgRepos(octokit, { org: "octocat", type });
+        expect(iteratorSpy).toHaveBeenCalledWith(
+          "GET /orgs/{org}/repos",
+          expect.objectContaining({ org: "octocat", type }),
+        );
+      }),
+    );
+  });
+
+  it("defaults the `type` parameter to 'all' when none is supplied", async () => {
+    const { octokit, iteratorSpy } = makeFakeOctokit([
+      sampleRepo as unknown as Record<string, unknown>,
+    ]);
+    await getOrgRepos(octokit, { org: "octocat" });
+    expect(iteratorSpy).toHaveBeenCalledWith(
+      "GET /orgs/{org}/repos",
+      expect.objectContaining({ type: "all" }),
+    );
   });
 });
 
 describe("getRepo", () => {
   it("returns a parsed repo for the given owner/name", async () => {
-    const octokit = {
-      request: vi.fn().mockResolvedValue({ data: sampleRepo }),
-    } as unknown as Octokit;
+    const { octokit, requestSpy } = makeFakeOctokit();
+    mockRequest(requestSpy, { data: sampleRepo });
     const repo = await getRepo(octokit, { owner: "octocat", repo: "agents" });
     expect(repo.id).toBe(100);
     expect(repo.full_name).toBe("octocat/agents");

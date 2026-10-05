@@ -5,8 +5,18 @@ export { UserSchema, type User } from "./user.ts";
 export { RepoSchema, type Repo } from "./repo.ts";
 export { LabelSchema, type Label } from "./label.ts";
 export { RefSchema, type Ref } from "./ref.ts";
-export { PullRequestSchema, type PullRequest } from "./pull-request.ts";
+export {
+  PullRequestSchema,
+  MergeableStateSchema,
+  type PullRequest,
+  type MergeableState,
+} from "./pull-request.ts";
 export { IssueSchema, type Issue } from "./issue.ts";
+export {
+  TimelineEventSchema,
+  type TimelineEvent,
+  type TimelineEventName,
+} from "./timeline-event.ts";
 export { ReviewSchema, type Review } from "./review.ts";
 export { ReleaseSchema, type Release } from "./release.ts";
 export { DependabotAlertSchema, type DependabotAlert } from "./dependabot-alert.ts";

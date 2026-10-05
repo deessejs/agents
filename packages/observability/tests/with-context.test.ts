@@ -135,4 +135,72 @@ describe("withAgentContext", () => {
     expect(record["gen_ai.usage.output_tokens"]).toBe(200);
     expect(record["gen_ai.response.finish_reasons"]).toEqual(["end_turn"]);
   });
+
+  it("projects ctx.correlation_parent_agent onto correlation.parent_agent tag", async () => {
+    const { logger, records } = makeCapturingLogger({ agent: "agent-child" });
+    await withAgentContext(
+      {
+        agent: "agent-child",
+        run_id: "run-corr",
+        correlation_parent_agent: "agent-parent",
+      },
+      async () => {
+        logger.info("inside-child");
+      },
+    );
+    const captured = records() as Array<Record<string, unknown>>;
+    expect(captured).toHaveLength(1);
+    const record = captured[0] as Record<string, unknown>;
+    expect(record["correlation.parent_agent"]).toBe("agent-parent");
+    // Standard agent.* tags are still emitted alongside the correlation tag.
+    expect(record["agent.name"]).toBe("agent-child");
+    expect(record["agent.run_id"]).toBe("run-corr");
+  });
+
+  it("projects arbitrary ctx.extra fields onto context.* tags", async () => {
+    const { logger, records } = makeCapturingLogger({ agent: "agent-extra" });
+    await withAgentContext(
+      {
+        agent: "agent-extra",
+        run_id: "run-extra",
+        extra: {
+          tenant: "acme",
+          ticket_count: 7,
+          dry_run: true,
+        },
+      },
+      async () => {
+        logger.info("inside-extra");
+      },
+    );
+    const captured = records() as Array<Record<string, unknown>>;
+    expect(captured).toHaveLength(1);
+    const record = captured[0] as Record<string, unknown>;
+    // Each `extra` key lands under the `context.*` namespace so the
+    // standard agent.* / gen_ai.* / correlation.* namespaces stay clean.
+    expect(record["context.tenant"]).toBe("acme");
+    expect(record["context.ticket_count"]).toBe(7);
+    expect(record["context.dry_run"]).toBe(true);
+  });
+
+  it("logs outside the scope never carry correlation.parent_agent or context.* tags", async () => {
+    const { logger, records } = makeCapturingLogger({ agent: "agent-no-context" });
+    await withAgentContext(
+      {
+        agent: "agent-no-context",
+        run_id: "run-x",
+        correlation_parent_agent: "agent-parent",
+        extra: { tenant: "acme" },
+      },
+      async () => {
+        // Establish scope and immediately exit.
+      },
+    );
+    logger.info("after-scope");
+    const captured = records() as Array<Record<string, unknown>>;
+    expect(captured).toHaveLength(1);
+    const record = captured[0] as Record<string, unknown>;
+    expect(record["correlation.parent_agent"]).toBeUndefined();
+    expect(record["context.tenant"]).toBeUndefined();
+  });
 });

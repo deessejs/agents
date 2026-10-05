@@ -8,12 +8,18 @@ import { z } from "zod";
 /**
  * Single rate-limit bucket — used for both `resources.core` and `rate`.
  * `reset` is a unix timestamp in seconds (per GitHub docs).
+ *
+ * The upper bound is `MAX_RESET_TIMESTAMP = 4_102_444_800` (year 2100),
+ * chosen because it's far enough out to cover any plausible clock skew or
+ * future-dated tokens while still rejecting clearly invalid values
+ * (`Number.MAX_SAFE_INTEGER`, negative seconds, etc.).
  */
+const MAX_RESET_TIMESTAMP = 4_102_444_800;
 const RateLimitBucketSchema = z.object({
   limit: z.number().int().nonnegative(),
   used: z.number().int().nonnegative(),
   remaining: z.number().int().nonnegative(),
-  reset: z.number().int(),
+  reset: z.number().int().nonnegative().lte(MAX_RESET_TIMESTAMP),
 });
 
 /**

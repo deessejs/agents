@@ -57,17 +57,27 @@ const noopLogger = { warn: (_msg: string) => undefined };
 /**
  * Module-level secondary-retry counter. Keyed by a stable identifier
  * derived from the request URL so two unrelated requests don't share a
- * quota; cleared on each call to {@link resetSecondaryRetryCounter}.
+ * quota; cleared on each call to {@link __resetSecondaryRetryForTests}.
+ *
+ * Bounded by {@link SECONDARY_RETRY_MAP_MAX}: when the map grows beyond
+ * the cap we drop the oldest entries (insertion order via `Map`'s
+ * iteration order) so a long-lived client can't leak memory.
  */
+const SECONDARY_RETRY_MAP_MAX = 1_000;
 const secondaryRetryCounts = new Map<string, number>();
 
 /**
  * Increment the secondary-retry counter for a key and return the new
- * value.
+ * value. Trims the oldest entries if the map exceeds the cap.
  */
 function bumpSecondaryRetry(key: string): number {
   const next = (secondaryRetryCounts.get(key) ?? 0) + 1;
   secondaryRetryCounts.set(key, next);
+  while (secondaryRetryCounts.size > SECONDARY_RETRY_MAP_MAX) {
+    const oldestKey = secondaryRetryCounts.keys().next().value;
+    if (oldestKey === undefined) break;
+    secondaryRetryCounts.delete(oldestKey);
+  }
   return next;
 }
 

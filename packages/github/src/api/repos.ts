@@ -2,8 +2,8 @@
  * Repository helpers.
  */
 import type { Octokit } from "@octokit/core";
-import { RepoSchema, type Repo } from "../schemas/repo.js";
-import { paginateAll } from "../pagination.js";
+import { RepoSchema, type Repo } from "../schemas/repo.ts";
+import { paginateAll } from "../pagination.ts";
 
 export interface GetOrgReposOpts {
   org: string;

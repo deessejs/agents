@@ -9,9 +9,9 @@
 import type { Octokit } from "@octokit/core";
 import type { RequestParameters, Route } from "@octokit/types";
 
-import { createOctokit } from "./octokit.js";
-import { paginateAll as paginateAllImpl } from "./pagination.js";
-import { getRateLimit as getRateLimitImpl } from "./rate-limit.js";
+import { createOctokit } from "./octokit.ts";
+import { paginateAll as paginateAllImpl } from "./pagination.ts";
+import { getRateLimit as getRateLimitImpl } from "./rate-limit.ts";
 
 export interface GitHubClientConfig {
   /** Fine-grained PAT or GitHub App token. */

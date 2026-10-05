@@ -5,11 +5,10 @@
  * `dependabot_alerts:read` / `code_scanning_alerts:read` /
  * `secret_scanning_alerts:read` respectively.
  *
- * Filtering strategy: parse the row against the Zod schema first (so we
- * get a properly typed object) and then apply the in-memory filter on the
- * parsed value. This collapses what used to be three near-identical filter
- * callbacks into a single `applyFilter` helper that the public functions
- * close over with their own schema-aware predicate.
+ * Every row is parsed against the matching Zod schema at the boundary
+ * (via {@link paginateAll}'s validator hook) so the returned array is
+ * strongly typed. The optional `severity` / `state` filters then run on
+ * the parsed objects.
  */
 import type { Octokit } from "@octokit/core";
 import { z } from "zod";
@@ -43,6 +42,7 @@ export async function getDependabotAlerts(
     "GET /orgs/{org}/dependabot/alerts",
     { org: opts.org, per_page: 100 },
     { max: opts.max ?? 1000 },
+    DependabotAlertSchema.parse,
   );
 
   return rows.filter((alert) => {
@@ -74,6 +74,7 @@ export async function getCodeScanningAlerts(
     "GET /orgs/{org}/code-scanning/alerts",
     { org: opts.org, per_page: 100 },
     { max: opts.max ?? 1000 },
+    CodeScanningAlertSchema.parse,
   );
 
   return rows.filter((alert) => {
@@ -107,6 +108,7 @@ export async function getSecretScanningAlerts(
     "GET /orgs/{org}/secret-scanning/alerts",
     { org: opts.org, per_page: 100 },
     { max: opts.max ?? 1000 },
+    SecretScanningAlertSchema.parse,
   );
 
   return rows.filter((alert) => {

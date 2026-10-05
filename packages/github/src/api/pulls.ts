@@ -8,8 +8,8 @@
  */
 import type { Octokit } from "@octokit/core";
 
-import { paginateAll } from "../pagination.js";
-import { PullRequestSchema, type PullRequest } from "../schemas/pull-request.js";
+import { paginateAll } from "../pagination.ts";
+import { PullRequestSchema, type PullRequest } from "../schemas/pull-request.ts";
 
 export interface GetMergedPRsOpts {
   org: string;

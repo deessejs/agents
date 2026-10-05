@@ -4,9 +4,9 @@
 import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 
-import { DependabotAlertSchema } from "../src/schemas/dependabot-alert.js";
-import { CodeScanningAlertSchema } from "../src/schemas/code-scanning-alert.js";
-import { SecretScanningAlertSchema } from "../src/schemas/secret-scanning-alert.js";
+import { DependabotAlertSchema } from "../src/schemas/dependabot-alert.ts";
+import { CodeScanningAlertSchema } from "../src/schemas/code-scanning-alert.ts";
+import { SecretScanningAlertSchema } from "../src/schemas/secret-scanning-alert.ts";
 
 import dependabotFixture from "./fixtures/dependabot-alerts.json";
 import codeScanningFixture from "./fixtures/code-scanning-alerts.json";

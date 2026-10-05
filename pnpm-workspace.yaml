@@ -13,14 +13,16 @@ allowBuilds:
 # Add a new dep here once it's used by 2+ workspaces; remove when no consumers.
 #
 # Pinning policy:
-#   - `^` ranges for tooling: turbo, typescript, oxlint, oxfmt, vitest, zod.
-#     We move these fast; minor bumps rarely break.
+#   - `^` ranges for build / test tooling: turbo, typescript, oxlint, oxfmt,
+#     vitest, @types/node. Minor bumps are cheap and rarely break us.
 #   - Exact pins for runtime libraries where ABI breaks are routine: the
-#     ai-sdk family, @octokit/*, @opentelemetry/*, pino, gpt-tokenizer,
-#     @vercel/kv. Pinning forces a deliberate bump on every minor.
+#     ai-sdk family, @octokit/* (core only), pino, gpt-tokenizer, zod.
+#     Pinning forces a deliberate bump on every minor.
+#   - `^` is allowed for runtime deps where the upstream policy is
+#     SemVer-strict: @opentelemetry/*, @octokit/types, @vercel/kv.
 # ----------------------------------------------------------------------------
 catalog:
-  # Build / tooling (cared-prefix OK; minor bumps are safe)
+  # Build / test tooling (caret-prefix OK; minor bumps are safe)
   turbo: ^2.3.0
   typescript: ^5.6.0
   "@changesets/cli": ^2.27.0
@@ -30,6 +32,10 @@ catalog:
   # OXC toolchain (replaces ESLint + Prettier)
   oxlint: ^1.0.0
   oxfmt: ^0.71.0
+
+  # Runtime — Zod schema validation is the public API boundary for every
+  # package; a minor bump can reshape parsing semantics. Pinned.
+  zod: ^4.1.8
 
   # AI SDK stack.
   # Versions pinned because ai-sdk majors frequently break ABI without
@@ -42,9 +48,9 @@ catalog:
   "@ai-sdk/minimax": 3.0.48
   "@ai-sdk/provider-utils": 5.0.53
   gpt-tokenizer: ^2.5.0
-  zod: ^4.1.8
 
-  # Observability (pinned — otel SDK majors ship breaking changes)
+  # Observability (pinned — otel SDK majors ship breaking changes;
+  # @opentelemetry/* stays caret because their published majors are reliable)
   pino: ^9.5.0
   pino-pretty: ^11.3.0
   "@opentelemetry/api": ^1.9.0
@@ -60,7 +66,6 @@ catalog:
   "@octokit/plugin-paginate-rest": 16.0.0
   "@octokit/plugin-retry": 8.1.1
   "@octokit/types": ^18.0.0
-  msw: ^2.6.0
 
   # Vercel KV (used by env, observability, runtime for state/dedup)
   "@vercel/kv": ^3.0.0

@@ -8,8 +8,10 @@
  * This is stronger than the prior "did not throw" assertion.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { OctokitResponse } from "@octokit/types";
 
 import { createGitHubClient } from "../src/client.ts";
+import type { MockOctokitResponse } from "./helpers/fake-octokit.ts";
 
 const throttlingSpy = vi.fn();
 const retrySpy = vi.fn();
@@ -43,6 +45,15 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+/**
+ * Build an `OctokitResponse`-shaped mock for `vi.spyOn(...).mockResolvedValue`.
+ * Wraps a `MockOctokitResponse` and tags it with the type the production
+ * code expects so we never need an `as never` escape hatch.
+ */
+function buildResponse<T>(payload: MockOctokitResponse<T>): OctokitResponse<T> {
+  return payload as OctokitResponse<T>;
+}
 
 describe("createGitHubClient", () => {
   it("creates a client with default config", () => {
@@ -100,28 +111,29 @@ describe("createGitHubClient", () => {
   it("getRateLimit returns rate-limit info", async () => {
     const gh = createGitHubClient({ auth: "ghp_test_token" });
 
-    // Mock the raw Octokit request.
-    vi.spyOn(gh.raw, "request").mockResolvedValue({
-      status: 200,
-      url: "https://api.github.com/rate_limit",
-      headers: {} as never,
-      data: {
-        resources: {
-          core: {
+    vi.spyOn(gh.raw, "request").mockResolvedValue(
+      buildResponse({
+        status: 200,
+        url: "https://api.github.com/rate_limit",
+        headers: {},
+        data: {
+          resources: {
+            core: {
+              limit: 5000,
+              used: 100,
+              remaining: 4900,
+              reset: 1_726_800_000,
+            },
+          },
+          rate: {
             limit: 5000,
             used: 100,
             remaining: 4900,
             reset: 1_726_800_000,
           },
         },
-        rate: {
-          limit: 5000,
-          used: 100,
-          remaining: 4900,
-          reset: 1_726_800_000,
-        },
-      },
-    } as never);
+      }),
+    );
 
     const info = await gh.getRateLimit();
     expect(info.limit).toBe(5000);

@@ -2,34 +2,21 @@
  * Tests for the security API helpers (Dependabot, Code Scanning, Secret Scanning).
  */
 import { describe, expect, it } from "vitest";
-import type { Octokit } from "@octokit/core";
 
 import {
   getDependabotAlerts,
   getCodeScanningAlerts,
   getSecretScanningAlerts,
-} from "../src/api/security.js";
+} from "../src/api/security.ts";
 
 import dependabotFixture from "./fixtures/dependabot-alerts.json";
 import codeScanningFixture from "./fixtures/code-scanning-alerts.json";
 import secretScanningFixture from "./fixtures/secret-scanning-alerts.json";
-
-function fakeOctokit(pages: unknown[][]): Octokit {
-  const iterator = (async function* () {
-    for (const page of pages) {
-      yield { data: page } as never;
-    }
-  })();
-
-  return {
-    paginate: { iterator: () => iterator },
-    request: () => Promise.resolve({ data: {} } as never),
-  } as unknown as Octokit;
-}
+import { makeFakeOctokit } from "./helpers/fake-octokit.ts";
 
 describe("getDependabotAlerts", () => {
   it("returns all alerts when no filters given", async () => {
-    const octokit = fakeOctokit([dependabotFixture]);
+    const { octokit } = makeFakeOctokit(dependabotFixture);
 
     const alerts = await getDependabotAlerts(octokit, { org: "octocat" });
     expect(alerts).toHaveLength(3);
@@ -38,7 +25,7 @@ describe("getDependabotAlerts", () => {
   });
 
   it("filters by severity", async () => {
-    const octokit = fakeOctokit([dependabotFixture]);
+    const { octokit } = makeFakeOctokit(dependabotFixture);
 
     const alerts = await getDependabotAlerts(octokit, {
       org: "octocat",
@@ -49,7 +36,7 @@ describe("getDependabotAlerts", () => {
   });
 
   it("filters by state", async () => {
-    const octokit = fakeOctokit([dependabotFixture]);
+    const { octokit } = makeFakeOctokit(dependabotFixture);
 
     const alerts = await getDependabotAlerts(octokit, {
       org: "octocat",
@@ -60,7 +47,7 @@ describe("getDependabotAlerts", () => {
   });
 
   it("returns [] for empty results", async () => {
-    const octokit = fakeOctokit([[]]);
+    const { octokit } = makeFakeOctokit([]);
     const alerts = await getDependabotAlerts(octokit, { org: "octocat" });
     expect(alerts).toEqual([]);
   });
@@ -68,7 +55,7 @@ describe("getDependabotAlerts", () => {
 
 describe("getCodeScanningAlerts", () => {
   it("returns parsed alerts", async () => {
-    const octokit = fakeOctokit([codeScanningFixture]);
+    const { octokit } = makeFakeOctokit(codeScanningFixture);
 
     const alerts = await getCodeScanningAlerts(octokit, { org: "octocat" });
     expect(alerts).toHaveLength(2);
@@ -78,7 +65,7 @@ describe("getCodeScanningAlerts", () => {
   });
 
   it("filters by state", async () => {
-    const octokit = fakeOctokit([codeScanningFixture]);
+    const { octokit } = makeFakeOctokit(codeScanningFixture);
 
     const alerts = await getCodeScanningAlerts(octokit, {
       org: "octocat",
@@ -91,7 +78,7 @@ describe("getCodeScanningAlerts", () => {
 
 describe("getSecretScanningAlerts", () => {
   it("returns parsed alerts", async () => {
-    const octokit = fakeOctokit([secretScanningFixture]);
+    const { octokit } = makeFakeOctokit(secretScanningFixture);
 
     const alerts = await getSecretScanningAlerts(octokit, { org: "octocat" });
     expect(alerts).toHaveLength(2);
@@ -100,7 +87,7 @@ describe("getSecretScanningAlerts", () => {
   });
 
   it("filters by state", async () => {
-    const octokit = fakeOctokit([secretScanningFixture]);
+    const { octokit } = makeFakeOctokit(secretScanningFixture);
 
     const alerts = await getSecretScanningAlerts(octokit, {
       org: "octocat",

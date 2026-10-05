@@ -1,10 +1,7 @@
 {
   "extends": "@workspace/tsconfig/library.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": ".",
-    "allowImportingTsExtensions": true,
-    "noEmit": true
+    "rootDir": "."
   },
   "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"]
