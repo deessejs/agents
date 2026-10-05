@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build artifacts
+dist/
+build/
+.turbo/
+.next/
+out/
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Env files (keep .env.example tracked)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel/
+
+# Eve runtime artifacts (if any)
+.eve/
+.eve-cache/
+
+# Generated
+**/*.generated.ts
+**/*.generated.js
+
+# OS
+desktop.ini
+
+# Local-only working docs (design notes, scratch, archives — never committed)
+temp/
+
+# Claude Code local config (per-developer, not project-tracked)
+.claude/

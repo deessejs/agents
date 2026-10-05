@@ -1,0 +1,23 @@
+{
+  "name": "@workspace/oxlint-config",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "files": [
+    "*.ts",
+    "*.json"
+  ],
+  "type": "module",
+  "exports": {
+    "./oxlint": "./base.ts",
+    "./oxfmt": "./oxfmt.config.json",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "lint": "echo '[@workspace/oxlint-config] no lint (config package)'",
+    "typecheck": "echo '[@workspace/oxlint-config] no typecheck (config package)'",
+    "build": "echo '[@workspace/oxlint-config] no build (config package)'",
+    "test": "echo '[@workspace/oxlint-config] no test (config package)'",
+    "clean": "echo '[@workspace/oxlint-config] no clean (config package)'"
+  }
+}

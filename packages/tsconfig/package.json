@@ -1,0 +1,21 @@
+{
+  "name": "@workspace/tsconfig",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "files": [
+    "*.json"
+  ],
+  "exports": {
+    "./base.json": "./base.json",
+    "./library.json": "./library.json",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "lint": "echo '[@workspace/tsconfig] no lint (config package)'",
+    "typecheck": "echo '[@workspace/tsconfig] no typecheck (config package)'",
+    "build": "echo '[@workspace/tsconfig] no build (config package)'",
+    "test": "echo '[@workspace/tsconfig] no test (config package)'",
+    "clean": "echo '[@workspace/tsconfig] no clean (config package)'"
+  }
+}

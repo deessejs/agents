@@ -1,0 +1,36 @@
+{
+  "name": "agents-studio",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Multi-agent monorepo built on Vercel eve.dev — Technical Analyst is the first agent",
+  "type": "module",
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "check": "pnpm run lint && pnpm run format:check",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "dev": "turbo run dev",
+    "smoke": "turbo run smoke",
+    "clean": "turbo run clean && rm -rf node_modules .turbo",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "turbo run build && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "catalog:",
+    "@workspace/oxlint-config": "workspace:*",
+    "@workspace/tsconfig": "workspace:*",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.5.1"
+}

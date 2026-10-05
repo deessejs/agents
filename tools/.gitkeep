@@ -1,0 +1,2 @@
+# Tools directory — internal CLIs and scripts (codegen, sync, etc.).
+# Add scripts under tools/<tool-name>/.

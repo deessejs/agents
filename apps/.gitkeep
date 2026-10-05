@@ -1,0 +1,2 @@
+# Apps directory — each subdirectory is an eve agent.
+# Add your first agent under apps/<agent-name>/.
