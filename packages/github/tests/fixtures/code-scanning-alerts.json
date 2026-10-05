@@ -1,0 +1,58 @@
+[
+  {
+    "number": 11,
+    "state": "open",
+    "severity": "high",
+    "rule_id": "js/sql-injection",
+    "rule": {
+      "id": "js/sql-injection",
+      "name": "Database query built from user-controlled data",
+      "severity": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "version": "2.20.0"
+    },
+    "most_recent_instance": {
+      "location": {
+        "path": "src/api/handlers.ts",
+        "start_line": 42,
+        "end_line": 45,
+        "start_column": 1,
+        "end_column": 80
+      },
+      "message": {
+        "text": "This query string is built from user-controlled data."
+      }
+    },
+    "html_url": "https://github.com/octocat/agents/security/code-scanning/11",
+    "created_at": "2026-09-20T10:00:00Z"
+  },
+  {
+    "number": 12,
+    "state": "fixed",
+    "severity": "medium",
+    "rule_id": "js/hardcoded-credentials",
+    "rule": {
+      "id": "js/hardcoded-credentials",
+      "name": "Hard-coded credentials",
+      "severity": "medium"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "version": "2.20.0"
+    },
+    "most_recent_instance": {
+      "location": {
+        "path": "src/config.ts",
+        "start_line": 10,
+        "end_line": 10
+      },
+      "message": {
+        "text": "Hard-coded secret detected."
+      }
+    },
+    "html_url": "https://github.com/octocat/agents/security/code-scanning/12",
+    "created_at": "2026-08-12T10:00:00Z"
+  }
+]

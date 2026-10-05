@@ -14,7 +14,6 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "dev": "turbo run dev",
-    "smoke": "turbo run smoke",
     "clean": "turbo run clean && rm -rf node_modules .turbo",
     "changeset": "changeset",
     "version-packages": "changeset version",
@@ -27,7 +26,8 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "turbo": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">=22"

@@ -1,0 +1,168 @@
+[
+  {
+    "number": 42,
+    "title": "Add rate-limit handling to GitHub client",
+    "body": "This PR introduces throttling callbacks for primary and secondary rate limits.",
+    "state": "closed",
+    "draft": false,
+    "merged": true,
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "user": {
+      "login": "octocat",
+      "id": 1,
+      "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+      "html_url": "https://github.com/octocat",
+      "type": "User"
+    },
+    "head": {
+      "label": "octocat:feature/throttling",
+      "ref": "feature/throttling",
+      "sha": "abc1234567890abc1234567890abc1234567890a",
+      "user": {
+        "login": "octocat",
+        "id": 1,
+        "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+        "html_url": "https://github.com/octocat",
+        "type": "User"
+      },
+      "repo": {
+        "id": 100,
+        "name": "agents",
+        "full_name": "octocat/agents",
+        "private": false,
+        "html_url": "https://github.com/octocat/agents",
+        "default_branch": "main",
+        "owner": {
+          "login": "octocat",
+          "id": 1,
+          "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+          "html_url": "https://github.com/octocat",
+          "type": "User"
+        }
+      }
+    },
+    "base": {
+      "label": "octocat:main",
+      "ref": "main",
+      "sha": "def0987654321def0987654321def0987654321d",
+      "user": {
+        "login": "octocat",
+        "id": 1,
+        "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+        "html_url": "https://github.com/octocat",
+        "type": "User"
+      },
+      "repo": {
+        "id": 100,
+        "name": "agents",
+        "full_name": "octocat/agents",
+        "private": false,
+        "html_url": "https://github.com/octocat/agents",
+        "default_branch": "main",
+        "owner": {
+          "login": "octocat",
+          "id": 1,
+          "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+          "html_url": "https://github.com/octocat",
+          "type": "User"
+        }
+      }
+    },
+    "created_at": "2026-10-01T10:00:00Z",
+    "updated_at": "2026-10-02T11:00:00Z",
+    "closed_at": "2026-10-02T11:00:00Z",
+    "merged_at": "2026-10-02T11:00:00Z",
+    "merge_commit_sha": "deadbeefcafebabedeadbeefcafebabedeadbeef",
+    "additions": 120,
+    "deletions": 30,
+    "changed_files": 5,
+    "comments": 3,
+    "review_comments": 1,
+    "commits": 2,
+    "html_url": "https://github.com/octocat/agents/pull/42",
+    "labels": [
+      {
+        "id": 7,
+        "name": "enhancement",
+        "color": "a2eeef",
+        "description": "New feature or request",
+        "default": true
+      }
+    ],
+    "id": 1000
+  },
+  {
+    "number": 43,
+    "title": "WIP: experimental schema exploration",
+    "body": null,
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "mergeable": null,
+    "mergeable_state": "draft",
+    "user": null,
+    "head": {
+      "label": "octocat:wip/schemas",
+      "ref": "wip/schemas",
+      "sha": "f00d01e1f1f1f1f00d01e1f1f1f1f00d01e1f1f1",
+      "user": null,
+      "repo": {
+        "id": 100,
+        "name": "agents",
+        "full_name": "octocat/agents",
+        "private": false,
+        "html_url": "https://github.com/octocat/agents",
+        "default_branch": "main",
+        "owner": {
+          "login": "octocat",
+          "id": 1,
+          "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+          "html_url": "https://github.com/octocat",
+          "type": "User"
+        }
+      }
+    },
+    "base": {
+      "label": "octocat:main",
+      "ref": "main",
+      "sha": "def0987654321def0987654321def0987654321d",
+      "user": {
+        "login": "octocat",
+        "id": 1,
+        "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+        "html_url": "https://github.com/octocat",
+        "type": "User"
+      },
+      "repo": {
+        "id": 100,
+        "name": "agents",
+        "full_name": "octocat/agents",
+        "private": false,
+        "html_url": "https://github.com/octocat/agents",
+        "default_branch": "main",
+        "owner": {
+          "login": "octocat",
+          "id": 1,
+          "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+          "html_url": "https://github.com/octocat",
+          "type": "User"
+        }
+      }
+    },
+    "created_at": "2026-10-03T09:00:00Z",
+    "updated_at": "2026-10-03T09:00:00Z",
+    "closed_at": null,
+    "merged_at": null,
+    "merge_commit_sha": null,
+    "additions": null,
+    "deletions": null,
+    "changed_files": null,
+    "comments": 0,
+    "review_comments": 0,
+    "commits": 1,
+    "html_url": "https://github.com/octocat/agents/pull/43",
+    "labels": [],
+    "id": 1001
+  }
+]

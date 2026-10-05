@@ -1,0 +1,8 @@
+{
+  "extends": "@workspace/tsconfig/library.json",
+  "compilerOptions": {
+    "rootDir": "."
+  },
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
