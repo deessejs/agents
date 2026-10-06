@@ -43,6 +43,12 @@ export const baseOxlintConfig = {
     fetch: "readonly",
     crypto: "readonly",
     performance: "readonly",
+    // Web Fetch API globals (Node 22+). Used by route handlers in
+    // apps/* that don't import a framework-supplied Request/Response.
+    Request: "readonly",
+    Response: "readonly",
+    Headers: "readonly",
+    FormData: "readonly",
   },
   rules: {
     "@typescript-eslint/no-unused-vars": [
@@ -79,7 +85,10 @@ export const baseOxlintConfig = {
     // Test-only escape hatches use `__nameForTests` convention; allow it.
     "eslint/no-underscore-dangle": [
       "error",
-      { allowAfterThis: false, allow: ["__resetSecondaryRetryForTests", "__resetOtelForTests"] },
+      {
+        allowAfterThis: false,
+        allow: ["__resetSecondaryRetryForTests", "__resetOtelForTests", "__filename", "__dirname"],
+      },
     ],
   },
   // Per-directory overrides for tests.
