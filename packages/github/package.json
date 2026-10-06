@@ -24,8 +24,7 @@
     "@octokit/plugin-paginate-rest": "catalog:",
     "@octokit/plugin-retry": "catalog:",
     "@octokit/plugin-throttling": "catalog:",
-    "@octokit/types": "catalog:",
-    "zod": "catalog:"
+    "@octokit/types": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

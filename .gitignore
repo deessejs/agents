@@ -57,3 +57,6 @@ temp/
 .claude/
 # Eve framework build output
 .eve/
+# Local preview artifacts produced by `submit_digest({ preview: true })`.
+# Per-test: apps/technical-analyst/tmp/preview-*.html
+apps/**/tmp/

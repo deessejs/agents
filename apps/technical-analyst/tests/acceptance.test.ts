@@ -2,10 +2,11 @@
  * Acceptance tests for the Technical Analyst.
  *
  * These tests exercise the REAL tool bodies (collect_activity +
- * submit_digest) with mocked GitHub + Resend + KV. They cover the
- * 10 acceptance criteria from the refactor brief. Criteria 1-3
- * (Eve discovery, build, schedule dispatch) are exercised by the
- * `eve info` + `eve build` steps in CI on Node 24.
+ * submit_digest) with mocked GitHub + Resend. They cover the v1
+ * acceptance criteria: tool discovery, counts, repo-qualified ids,
+ * pause-before-collect, essential-source failure, secret projection,
+ * report validation, preview, edition identity, quiet-period
+ * rendering, plain-text content, and schedule dispatch semantics.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
@@ -131,7 +132,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-// ── Mocked Octokit + KV + Resend ────────────────────────────────────────
+// ── Mocked Octokit + Resend ──────────────────────────────────────────────
 
 const FIXTURE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures", "github-rest");
 
@@ -282,7 +283,11 @@ describe("collect_activity", () => {
     }
   });
 
-  it("throws when an essential source (Dependabot) fails", async () => {
+  it("a failed security source does not abort collection; surfaces availability", async () => {
+    // v1 partial-collection semantics: a single failed security
+    // endpoint does not abort the digest. The corpus records an
+    // availability entry naming the failed source so the renderer
+    // surfaces it. Counts from the working endpoints are still computed.
     const failOctokit: unknown = {
       request: () => Promise.reject(new Error("503 Service Unavailable")),
       paginate: {
@@ -296,9 +301,16 @@ describe("collect_activity", () => {
     }));
     const mod = await import("../agent/tools/collect_activity.ts");
     const tool = mod.default;
-    await expect(
-      withEveContext(async () => tool.execute({ kind: "daily" } as never, ctx as never)),
-    ).rejects.toThrow(/503/);
+    const result = (await withEveContext(
+      async () => tool.execute({ kind: "daily" } as never, ctx as never) as unknown,
+    )) as Awaited<ReturnType<typeof tool.execute>>;
+    expect(result.sources).toEqual([]);
+    // At least one availability entry names each of the three security
+    // sources that failed.
+    const reasons = result.availability.map((a) => a.reason).join("\n");
+    expect(reasons).toMatch(/Dependabot/);
+    expect(reasons).toMatch(/CodeQL/);
+    expect(reasons).toMatch(/Secret-scanning/);
   });
 
   it("throws when env.AGENTS_PAUSED=true (pause-before-collect)", async () => {
@@ -816,5 +828,177 @@ describe("Plain-text is meaningful (criterion 7)", () => {
     expect(digest.text).toContain("OAuth PKCE landed");
     expect(digest.text).toContain("feat: OAuth PKCE support");
     expect(digest.text).toContain("https://github.com/deessejs/agents/pull/142");
+  });
+});
+
+// ── Schedule dispatch contract (review of commit 711642f) ──────────────
+
+describe("Schedule dispatch contract", () => {
+  const ctx = {
+    callId: "x",
+    toolName: "x",
+    messages: [],
+    abortSignal: new globalThis.AbortController().signal,
+    session: { auth: {} as never },
+  };
+
+  function buildFullFakeOctokit() {
+    return buildFakeOctokit({
+      "GET /repos/{owner}/{repo}/dependabot/alerts": { fixture: "dependabot-alerts.json" },
+      "GET /repos/{owner}/{repo}/code-scanning/alerts": { fixture: "code-scanning-alerts.json" },
+      "GET /repos/{owner}/{repo}/secret-scanning/alerts": {
+        fixture: "secret-scanning-alerts.json",
+      },
+      "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
+      "GET /search/issues": {
+        match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
+        fixture: "merged-prs.json",
+      },
+      "GET /search/issues_issues": { fixture: "issues-empty.json" },
+      "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
+      "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
+    });
+  }
+
+  it("submit_digest sets endsTurn: true so the schedule run is delivered", async () => {
+    // submit_digest must mark the turn as ending after delivery. A
+    // schedule's run is only "successful" if a tool with endsTurn: true
+    // is invoked; otherwise Eve reports the run as having produced no
+    // delivery. We assert the contract here.
+    const submitMod = await import("../agent/tools/submit_digest.ts");
+    const tool = submitMod.default as unknown as { endsTurn?: boolean };
+    expect(tool.endsTurn).toBe(true);
+  });
+
+  it("schedule run is delivered when the model calls collect then submit", async () => {
+    const fakeOctokit = buildFullFakeOctokit();
+    let delivered = false;
+    vi.doMock("@workspace/github", () => ({
+      createGitHubClient: () => ({ raw: fakeOctokit }),
+    }));
+    vi.doMock("@workspace/email", async () => {
+      const actual = await vi.importActual<typeof import("@workspace/email")>("@workspace/email");
+      return {
+        ...actual,
+        createEmailClient: () => ({
+          async send() {
+            delivered = true;
+            return { id: "resend_test_id", idempotencyKey: "digest:send:abc" };
+          },
+        }),
+      };
+    });
+    await withEveContext(async () => {
+      const collectMod = await import("../agent/tools/collect_activity.ts");
+      const submitMod = await import("../agent/tools/submit_digest.ts");
+      await collectMod.default.execute({ kind: "daily" } as never, ctx as never);
+      const corpusMod = await import("../agent/lib/state.ts");
+      const corpus = corpusMod.sourceCorpus.get();
+      const pr = corpus.sources.find((s) => s.kind === "merged_pr");
+      if (!pr) throw new Error("fixture has no merged_pr");
+      await submitMod.default.execute(
+        {
+          kind: "daily",
+          report: {
+            kind: "daily",
+            sections: [{ kind: "tldr", items: [{ text: "x", referenceId: pr.id }] }],
+          },
+        } as never,
+        ctx as never,
+      );
+    });
+    expect(delivered).toBe(true);
+  });
+
+  it("partial collection still delivers the digest with availability surfaced", async () => {
+    // v1 schedule contract: a partial collection (one source fails)
+    // does not abort the digest. The model reaches submit_digest with
+    // a non-empty source list, the digest is delivered, and the failed
+    // source appears in the availability block so the operator sees it.
+    const failOctokit: unknown = {
+      request: (route: string) => {
+        if (route.includes("dependabot")) {
+          return Promise.reject(new Error("403 rate-limited"));
+        }
+        return Promise.resolve({ data: [], headers: {}, status: 200, url: route });
+      },
+      paginate: {
+        iterator: (route: string) => {
+          if (route.includes("dependabot")) {
+            throw new Error("403 rate-limited");
+          }
+          return (async function* () {
+            yield { data: [] };
+          })();
+        },
+      },
+    };
+    let delivered = false;
+    vi.doMock("@workspace/github", () => ({
+      createGitHubClient: () => ({ raw: failOctokit }),
+    }));
+    vi.doMock("@workspace/email", async () => {
+      const actual = await vi.importActual<typeof import("@workspace/email")>("@workspace/email");
+      return {
+        ...actual,
+        createEmailClient: () => ({
+          async send() {
+            delivered = true;
+            return { id: "resend_partial_id", idempotencyKey: "digest:send:partial" };
+          },
+        }),
+      };
+    });
+    await withEveContext(async () => {
+      const collectMod = await import("../agent/tools/collect_activity.ts");
+      await collectMod.default.execute({ kind: "daily" } as never, ctx as never);
+      const corpusMod = await import("../agent/lib/state.ts");
+      const corpus = corpusMod.sourceCorpus.get();
+      // Dependabot failed; the model can still submit from the
+      // remaining sources (e.g. secret-scanning). With every other
+      // endpoint mocked empty, the only available corpus is whatever
+      // didn't fail.
+      const any = corpus.sources[0];
+      const sectionItems = any
+        ? [{ kind: "risks", items: [{ text: "x", referenceId: any.id }] }]
+        : [];
+      const submitMod = await import("../agent/tools/submit_digest.ts");
+      const report =
+        sectionItems.length > 0
+          ? { kind: "daily" as const, sections: sectionItems }
+          : { kind: "daily" as const, sections: [{ kind: "tldr", items: [] }] };
+      await submitMod.default.execute({ kind: "daily", report } as never, ctx as never);
+    });
+    expect(delivered).toBe(true);
+  });
+
+  it("schedule run is unsuccessful when the model emits no submit (only collect)", async () => {
+    // Models sometimes call collect_activity and then end the turn
+    // without submitting. submit_digest is the only tool with
+    // endsTurn: true; without it, Eve reports no output → run is
+    // unsuccessful.
+    const fakeOctokit = buildFullFakeOctokit();
+    let delivered = false;
+    vi.doMock("@workspace/github", () => ({
+      createGitHubClient: () => ({ raw: fakeOctokit }),
+    }));
+    vi.doMock("@workspace/email", async () => {
+      const actual = await vi.importActual<typeof import("@workspace/email")>("@workspace/email");
+      return {
+        ...actual,
+        createEmailClient: () => ({
+          async send() {
+            delivered = true;
+            return { id: "x", idempotencyKey: "x" };
+          },
+        }),
+      };
+    });
+    await withEveContext(async () => {
+      const collectMod = await import("../agent/tools/collect_activity.ts");
+      await collectMod.default.execute({ kind: "daily" } as never, ctx as never);
+      // Intentionally no submit_digest call.
+    });
+    expect(delivered).toBe(false);
   });
 });

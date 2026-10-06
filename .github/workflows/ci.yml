@@ -63,24 +63,20 @@ jobs:
       - name: Test
         run: pnpm run test
 
+      # Single canonical build step. turbo.json declares the env keys the
+      # agent app's `eve build` task needs (`build.env`); we propagate
+      # synthetic values here so the build never reads production
+      # credentials. `eve info` lives in its own step (no build artifacts,
+      # no env requirement).
       - name: Eve discovery
         working-directory: apps/technical-analyst
-        env:
-          # Synthetic env so `eve info` / `eve build` pass the agent's
-          # env validation. No production credentials touch CI.
-          GITHUB_TOKEN: ghp_testTokenForCIabcdef0123
-          GITHUB_ORG: deessejs-test
-          GITHUB_REPO: agents-test
-          RESEND_API_KEY: re_testKeyForCI_1234567890
-          RESEND_FROM_ADDRESS: digest@mail.example.com
-          RESEND_FROM_NAME: Technical Analyst
-          DIGEST_RECIPIENT: ops@example.com
-          MINIMAX_API_KEY: minimax_test_key
         run: ./node_modules/.bin/eve info
 
-      - name: Eve build
-        working-directory: apps/technical-analyst
+      - name: Build (turbo)
         env:
+          # Synthetic env so `eve build` (the agent app's build script)
+          # passes the agent's env validation. No production credentials
+          # touch CI. These are the keys listed in turbo.json > build.env.
           GITHUB_TOKEN: ghp_testTokenForCIabcdef0123
           GITHUB_ORG: deessejs-test
           GITHUB_REPO: agents-test
@@ -89,9 +85,4 @@ jobs:
           RESEND_FROM_NAME: Technical Analyst
           DIGEST_RECIPIENT: ops@example.com
           MINIMAX_API_KEY: minimax_test_key
-        run: ./node_modules/.bin/eve build
-
-      - name: Build (turbo)
         run: pnpm run build
-        # turbo dispatches to each workspace's build; the agent app's
-        # build runs `eve build`, the shared packages run `tsc --noEmit`.

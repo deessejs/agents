@@ -25,7 +25,6 @@ catalog:
   # Build / test tooling (caret-prefix OK; minor bumps are safe)
   turbo: ^2.3.0
   typescript: ^5.6.0
-  "@changesets/cli": ^2.27.0
   vitest: ^2.1.0
   "@types/node": ^22.0.0
 

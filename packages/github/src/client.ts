@@ -1,16 +1,14 @@
 /**
- * Public client factory + types for `@workspace/github`.
+ * Public client factory for `@workspace/github`.
  *
  * Use `createGitHubClient({ auth })` to get a configured Octokit with
- * throttling, retry, and pagination plugins applied. The returned
- * `GitHubClient` exposes a typed `paginateAll` and a `getRateLimit`
- * convenience method.
+ * throttling, retry, and pagination plugins applied. The agent
+ * accesses the underlying `raw` Octokit directly; no opinionated
+ * helper wrappers live on this client for v1.
  */
 import type { Octokit } from "@octokit/core";
-import type { RequestParameters, Route } from "@octokit/types";
 
 import { createOctokit } from "./octokit.ts";
-import { paginateAll as paginateAllImpl } from "./pagination.ts";
 
 export interface GitHubClientConfig {
   /** Fine-grained PAT or GitHub App token. */
@@ -32,69 +30,17 @@ export interface GitHubClientConfig {
   };
 }
 
-export interface RateLimitInfo {
-  remaining: number;
-  /** ISO date when the limit window resets. */
-  reset: Date;
-  limit: number;
-}
-
 export interface GitHubClient {
-  /** Underlying Octokit instance — for endpoints not covered by helpers. */
+  /** Underlying Octokit instance. */
   readonly raw: Octokit;
-  /**
-   * Walk every page of a paginated response and return a flat array.
-   * Generic in the page-item type for full type safety.
-   */
-  paginateAll: <T>(
-    route: Route,
-    params?: RequestParameters,
-    opts?: { max?: number },
-  ) => Promise<T[]>;
-  /** Fetch the current primary rate-limit state. */
-  getRateLimit(): Promise<RateLimitInfo>;
 }
 
 /**
- * Module-private: read the primary rate-limit bucket from
- * `GET /rate_limit`. The endpoint requires no permissions and is safe
- * to poll.
- */
-async function getRateLimitImpl(octokit: Octokit): Promise<RateLimitInfo> {
-  const response = await octokit.request("GET /rate_limit", {});
-  const data = response.data as {
-    resources?: { core?: { remaining: number; reset: number; limit: number } };
-  };
-  const core = data.resources?.core;
-  if (!core) throw new Error("getRateLimit: malformed response (no resources.core)");
-  return {
-    remaining: core.remaining,
-    reset: new Date(core.reset * 1000),
-    limit: core.limit,
-  };
-}
-
-/**
- * Build a `GitHubClient` configured with throttling, retry, and pagination.
- *
- * @example
- * ```ts
- * const gh = createGitHubClient({ auth: process.env.GITHUB_TOKEN! });
- * const prs = await gh.paginateAll<PullRequest>("GET /repos/{owner}/{repo}/pulls", {
- *   owner: "octocat",
- *   repo:  "hello",
- * });
- * ```
+ * Build a `GitHubClient` configured with throttling, retry, and
+ * pagination plugins.
  */
 export function createGitHubClient(config: GitHubClientConfig): GitHubClient {
-  const raw = createOctokit(config);
-
-  return {
-    raw,
-    paginateAll: <T>(route: Route, params?: RequestParameters, opts?: { max?: number }) =>
-      paginateAllImpl<T>(raw, route, params, opts),
-    getRateLimit: () => getRateLimitImpl(raw),
-  };
+  return { raw: createOctokit(config) };
 }
 
 export type { Octokit } from "@octokit/core";

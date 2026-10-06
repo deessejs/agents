@@ -26,11 +26,11 @@
  * queries). Client-side filtering is reserved for endpoints without
  * server-side date filters and is documented at each call site.
  *
- * **Failure semantics:** essential sources (security alerts) throw on
- * failure so the schedule aborts; an inaccessible security endpoint
- * must never be reported as "no alerts". Optional sources (open PRs,
- * recent runs) return `availability: "unavailable"` so the corpus
- * carries the explicit signal rather than silently masking the gap.
+ * **Failure semantics (v1):** every fetch is reported via per-source
+ * `availability`. A failed security endpoint does NOT abort the digest
+ * — partial collection is still useful, and an unavailable security
+ * source must never be presented as "no alerts". The renderer always
+ * surfaces availability so the operator sees what was unreachable.
  *
  * **Truncation:** when a paginated source reaches its cap before the
  * server reports end-of-results, the corpus's availability entry
@@ -101,24 +101,13 @@ function within(dateIso: string | null, period: Period): boolean {
   return t >= Date.parse(period.start) && t < Date.parse(period.end);
 }
 
-const KINDS_REQUIRING_DATE: ReadonlySet<Source["kind"]> = new Set([
-  "merged_pr",
-  "opened_issue",
-  "closed_issue",
-  "failed_workflow_run",
-  "release",
-]);
-
-function periodForKind(kind: Source["kind"]): "window" | "now" {
-  return KINDS_REQUIRING_DATE.has(kind) ? "window" : "now";
-}
-
 export default defineTool({
   description:
     "Collect GitHub activity for one digest edition (daily = previous UTC day, " +
-    "weekly = previous ISO week). Returns the source corpus the model cites, plus " +
-    "computed counts and weekly metrics. Throws when an essential source (security " +
-    "alerts) is inaccessible. Optional sources report availability explicitly.",
+    "weekly = current ISO week). Returns the source corpus the model cites, plus " +
+    "computed counts and weekly metrics. Every source reports availability " +
+    "explicitly — partial collection is still useful and a missing security source " +
+    "is never presented as 'no alerts'.",
   inputSchema: z.object({
     kind: z.enum(["daily", "weekly"]).describe("Digest edition to collect for."),
   }),
@@ -145,18 +134,14 @@ export default defineTool({
     };
     edition.update(() => editionValue);
 
-    // ── Fetch (fail loud for security endpoints) ──────────────────
+    // ── Fetch (fail soft: every source reports availability) ─────
     const gh = createGitHubClient({ auth: env.GITHUB_TOKEN });
     const octokit = gh.raw;
 
-    const essential = await Promise.all([
+    const all = await Promise.allSettled([
       fetchDependabot(octokit),
       fetchCodeScanning(octokit),
       fetchSecretScanning(octokit),
-    ]);
-    const [dependabot, codeScanning, secretScanning] = essential;
-
-    const optional = await Promise.allSettled([
       fetchMergedPRs(octokit, period),
       fetchOpenedIssues(octokit, period),
       fetchClosedIssues(octokit, period),
@@ -165,11 +150,61 @@ export default defineTool({
       fetchOpenPRs(octokit),
     ]);
 
-    const sources: Source[] = [...dependabot, ...codeScanning, ...secretScanning];
+    const sources: Source[] = [];
     const availability: SourceAvailability[] = [];
 
+    // Security alerts — partial collection is still useful; a missing
+    // security source must be visible, not silently dropped.
+    const dependabotResult = all[0];
+    if (dependabotResult.status === "fulfilled") {
+      sources.push(...dependabotResult.value.sources);
+      if (dependabotResult.value.truncated) {
+        availability.push({
+          status: "unavailable",
+          reason: `Dependabot alerts reached the 200-result cap; counts may be partial.`,
+        });
+      }
+    } else {
+      availability.push({
+        status: "unavailable",
+        reason: `Dependabot alerts: ${reasonMessage(dependabotResult.reason)}`,
+      });
+    }
+
+    const codeScanningResult = all[1];
+    if (codeScanningResult.status === "fulfilled") {
+      sources.push(...codeScanningResult.value.sources);
+      if (codeScanningResult.value.truncated) {
+        availability.push({
+          status: "unavailable",
+          reason: `CodeQL alerts reached the 200-result cap; counts may be partial.`,
+        });
+      }
+    } else {
+      availability.push({
+        status: "unavailable",
+        reason: `CodeQL alerts: ${reasonMessage(codeScanningResult.reason)}`,
+      });
+    }
+
+    const secretScanningResult = all[2];
+    if (secretScanningResult.status === "fulfilled") {
+      sources.push(...secretScanningResult.value.sources);
+      if (secretScanningResult.value.truncated) {
+        availability.push({
+          status: "unavailable",
+          reason: `Secret-scanning alerts reached the 200-result cap; counts may be partial.`,
+        });
+      }
+    } else {
+      availability.push({
+        status: "unavailable",
+        reason: `Secret-scanning alerts: ${reasonMessage(secretScanningResult.reason)}`,
+      });
+    }
+
     // Merged-PR result includes a truncation flag (search/issues caps at 1000).
-    const mergedRaw = optional[0];
+    const mergedRaw = all[3];
     if (mergedRaw.status === "fulfilled") {
       sources.push(...mergedRaw.value.sources);
       if (mergedRaw.value.truncated) {
@@ -181,30 +216,89 @@ export default defineTool({
     } else {
       availability.push({
         status: "unavailable",
-        reason:
-          mergedRaw.reason instanceof Error ? mergedRaw.reason.message : String(mergedRaw.reason),
+        reason: `Merged-PR search: ${reasonMessage(mergedRaw.reason)}`,
       });
     }
 
-    const opened = unwrap(optional[1]);
-    if (opened.ok) sources.push(...opened.value);
-    else availability.push(opened.availability);
+    const opened = all[4];
+    if (opened.status === "fulfilled") {
+      sources.push(...opened.value.sources);
+      if (opened.value.truncated) {
+        availability.push({
+          status: "unavailable",
+          reason: `Opened-issue search reached the 1000-result cap; counts may be partial.`,
+        });
+      }
+    } else {
+      availability.push({
+        status: "unavailable",
+        reason: `Opened-issue search: ${reasonMessage(opened.reason)}`,
+      });
+    }
 
-    const closed = unwrap(optional[2]);
-    if (closed.ok) sources.push(...closed.value);
-    else availability.push(closed.availability);
+    const closed = all[5];
+    if (closed.status === "fulfilled") {
+      sources.push(...closed.value.sources);
+      if (closed.value.truncated) {
+        availability.push({
+          status: "unavailable",
+          reason: `Closed-issue search reached the 1000-result cap; counts may be partial.`,
+        });
+      }
+    } else {
+      availability.push({
+        status: "unavailable",
+        reason: `Closed-issue search: ${reasonMessage(closed.reason)}`,
+      });
+    }
 
-    const failedRuns = unwrap(optional[3]);
-    if (failedRuns.ok) sources.push(...failedRuns.value);
-    else availability.push(failedRuns.availability);
+    const failedRuns = all[6];
+    if (failedRuns.status === "fulfilled") {
+      sources.push(...failedRuns.value.sources);
+      if (failedRuns.value.truncated) {
+        availability.push({
+          status: "unavailable",
+          reason: `Workflow-runs list reached the 100-result cap; failed-run count may be partial.`,
+        });
+      }
+    } else {
+      availability.push({
+        status: "unavailable",
+        reason: `Workflow runs: ${reasonMessage(failedRuns.reason)}`,
+      });
+    }
 
-    const releases = unwrap(optional[4]);
-    if (releases.ok) sources.push(...releases.value);
-    else availability.push(releases.availability);
+    const releases = all[7];
+    if (releases.status === "fulfilled") {
+      sources.push(...releases.value.sources);
+      if (releases.value.truncated) {
+        availability.push({
+          status: "unavailable",
+          reason: `Releases list reached the 50-result cap; counts may be partial.`,
+        });
+      }
+    } else {
+      availability.push({
+        status: "unavailable",
+        reason: `Releases: ${reasonMessage(releases.reason)}`,
+      });
+    }
 
-    const openPRs = unwrap(optional[5]);
-    if (openPRs.ok) sources.push(...openPRs.value);
-    else availability.push(openPRs.availability);
+    const openPRs = all[8];
+    if (openPRs.status === "fulfilled") {
+      sources.push(...openPRs.value.sources);
+      if (openPRs.value.truncated) {
+        availability.push({
+          status: "unavailable",
+          reason: `Open-PR list reached the 100-result cap; count may be partial.`,
+        });
+      }
+    } else {
+      availability.push({
+        status: "unavailable",
+        reason: `Open PRs: ${reasonMessage(openPRs.reason)}`,
+      });
+    }
 
     // ── Persist + return compact, model-visible corpus ────────────
     const counts = computeCounts(sources);
@@ -253,7 +347,7 @@ async function listAll(
   route: string,
   params: Record<string, unknown>,
   max: number,
-): Promise<unknown[]> {
+): Promise<{ rows: unknown[]; truncated: boolean }> {
   // The paginate plugin attaches a `paginate` field at runtime that
   // the base Octokit type does not model. We cast through unknown to
   // call `paginate.iterator(...)` without losing the underlying
@@ -267,11 +361,20 @@ async function listAll(
   for await (const page of iter) {
     for (const item of page.data) {
       out.push(item);
-      if (out.length >= max) return out;
+      if (out.length >= max) {
+        // We can't know if there's another page after we hit the cap.
+        // Callers report this via availability.
+        return { rows: out, truncated: true };
+      }
     }
   }
-  return out;
+  return { rows: out, truncated: false };
 }
+
+/** A fetch result carries its truncation flag so the caller can
+ * record availability once. `truncated` means we hit the per-fetch
+ * cap before exhausting results. */
+type CappedFetch = { sources: Source[]; truncated: boolean };
 
 function asObject(v: unknown): Record<string, unknown> | null {
   if (typeof v !== "object" || v === null) return null;
@@ -287,8 +390,8 @@ function asNumber(v: unknown): number | null {
 }
 
 /** Dependabot alerts — repo-scoped, projection from the nested `dependency` + `security_vulnerability`. */
-async function fetchDependabot(octokit: OctokitRaw): Promise<Source[]> {
-  const rows = await listAll(
+async function fetchDependabot(octokit: OctokitRaw): Promise<CappedFetch> {
+  const { rows, truncated } = await listAll(
     octokit,
     "GET /repos/{owner}/{repo}/dependabot/alerts",
     { owner: env.GITHUB_ORG, repo: env.GITHUB_REPO, state: "open", per_page: 100 },
@@ -320,13 +423,18 @@ async function fetchDependabot(octokit: OctokitRaw): Promise<Source[]> {
       },
     });
   }
-  return out;
+  return { sources: out, truncated };
 }
 
 /** CodeQL alerts — repo-scoped, projection preserves diagnostic severity
- * (`warning`/`error`/`note`) AND security severity (when present). */
-async function fetchCodeScanning(octokit: OctokitRaw): Promise<Source[]> {
-  const rows = await listAll(
+ * (`warning`/`error`/`note`) AND security severity (when present).
+ *
+ * Security severity lives at `rule.security_severity_level` per the
+ * real REST response (a top-level `security_severity_level` does not
+ * exist on `/code-scanning/alerts`). We also accept the legacy top-
+ * level field for backward compatibility with older API responses. */
+async function fetchCodeScanning(octokit: OctokitRaw): Promise<CappedFetch> {
+  const { rows, truncated } = await listAll(
     octokit,
     "GET /repos/{owner}/{repo}/code-scanning/alerts",
     { owner: env.GITHUB_ORG, repo: env.GITHUB_REPO, state: "open", per_page: 100 },
@@ -341,7 +449,8 @@ async function fetchCodeScanning(octokit: OctokitRaw): Promise<Source[]> {
     if (number === null || url === null) continue;
     const rule = asObject(r.rule);
     const diagSeverity = asString(rule?.severity); // warning/error/note
-    const secSeverity = asString(r.security_severity_level); // low/medium/high/critical
+    const secSeverity =
+      asString(rule?.security_severity_level) ?? asString(r.security_severity_level); // low/medium/high/critical
     const severity = secSeverity ?? diagSeverity ?? null;
     const ruleId = asString(r.rule_id) ?? asString(rule?.id) ?? null;
     const ruleName = asString(rule?.name) ?? `Rule ${ruleId ?? number}`;
@@ -360,12 +469,12 @@ async function fetchCodeScanning(octokit: OctokitRaw): Promise<Source[]> {
       },
     });
   }
-  return out;
+  return { sources: out, truncated };
 }
 
 /** Secret-scanning alerts — repo-scoped, categorical fields only; never the secret value. */
-async function fetchSecretScanning(octokit: OctokitRaw): Promise<Source[]> {
-  const rows = await listAll(
+async function fetchSecretScanning(octokit: OctokitRaw): Promise<CappedFetch> {
+  const { rows, truncated } = await listAll(
     octokit,
     "GET /repos/{owner}/{repo}/secret-scanning/alerts",
     { owner: env.GITHUB_ORG, repo: env.GITHUB_REPO, state: "open", per_page: 100 },
@@ -388,7 +497,7 @@ async function fetchSecretScanning(octokit: OctokitRaw): Promise<Source[]> {
       meta: { secret_type: secretType, number },
     });
   }
-  return out;
+  return { sources: out, truncated };
 }
 
 /** Merged PRs — search endpoint, exact merge-date filter on the server.
@@ -396,17 +505,14 @@ async function fetchSecretScanning(octokit: OctokitRaw): Promise<Source[]> {
  * period" the only correct ordering is the search `merged:start..end`
  * qualifier. The repo's pulls?state=closed endpoint is NOT used here
  * because it caps before merge-date filtering. */
-async function fetchMergedPRs(
-  octokit: OctokitRaw,
-  period: Period,
-): Promise<{ sources: Source[]; truncated: boolean }> {
+async function fetchMergedPRs(octokit: OctokitRaw, period: Period): Promise<CappedFetch> {
   const q = [
     "is:pr",
     "is:merged",
     `repo:${env.GITHUB_ORG}/${env.GITHUB_REPO}`,
     `merged:${period.start}..${period.end}`,
   ].join(" ");
-  const rows = await listAll(
+  const { rows, truncated } = await listAll(
     octokit,
     "GET /search/issues",
     { q, per_page: 100, sort: "updated", order: "desc" },
@@ -438,15 +544,14 @@ async function fetchMergedPRs(
       },
     });
   }
-  // search/issues caps at 1000 results. We can't always know we hit
-  // end-of-results, so we don't claim truncation here; we report the
-  // cap via availability from the caller.
-  return { sources: out, truncated: rows.length >= 1000 };
+  // search/issues caps at 1000 results; `listAll` reports truncation
+  // when the cap is hit.
+  return { sources: out, truncated };
 }
 
-/** Open PRs — window-independent. */
-async function fetchOpenPRs(octokit: OctokitRaw): Promise<Source[]> {
-  const rows = await listAll(
+/** Open PRs — window-independent, single page (per_page=100). */
+async function fetchOpenPRs(octokit: OctokitRaw): Promise<CappedFetch> {
+  const { rows, truncated } = await listAll(
     octokit,
     "GET /repos/{owner}/{repo}/pulls",
     { owner: env.GITHUB_ORG, repo: env.GITHUB_REPO, state: "open", per_page: 100 },
@@ -473,23 +578,36 @@ async function fetchOpenPRs(octokit: OctokitRaw): Promise<Source[]> {
       },
     });
   }
-  return out;
+  return { sources: out, truncated };
 }
 
 /** Opened issues — search endpoint filters by `created`. No `is:open`
  * qualifier so issues created and closed within the period are still
- * surfaced (they belong in the opened set even if currently closed). */
-async function fetchOpenedIssues(octokit: OctokitRaw, period: Period): Promise<Source[]> {
+ * surfaced (they belong in the opened set even if currently closed).
+ *
+ * GitHub's `created:` search qualifier is inclusive at both ends, so a
+ * record exactly at `period.end` would otherwise be matched and leak
+ * into the next edition. We post-filter with `within()` (half-open
+ * `[start, end)`) to keep the window boundary consistent with the
+ * rest of the corpus. */
+async function fetchOpenedIssues(octokit: OctokitRaw, period: Period): Promise<CappedFetch> {
   const q = [
     "is:issue",
     `repo:${env.GITHUB_ORG}/${env.GITHUB_REPO}`,
     `created:${period.start}..${period.end}`,
   ].join(" ");
-  const rows = await listAll(octokit, "GET /search/issues", { q, per_page: 100 }, 1000);
+  const { rows, truncated } = await listAll(
+    octokit,
+    "GET /search/issues",
+    { q, per_page: 100 },
+    1000,
+  );
   const out: Source[] = [];
   for (const raw of rows) {
     const r = asObject(raw);
     if (!r) continue;
+    const createdAt = asString(r.created_at);
+    if (!within(createdAt, period)) continue;
     const number = asNumber(r.number);
     const url = asString(r.html_url);
     if (number === null || url === null) continue;
@@ -503,26 +621,34 @@ async function fetchOpenedIssues(octokit: OctokitRaw, period: Period): Promise<S
       meta: {
         number,
         author: asString(user?.login) ?? null,
-        created_at: asString(r.created_at),
+        created_at: createdAt,
       },
     });
   }
-  return out;
+  return { sources: out, truncated };
 }
 
-/** Closed issues — search by closed range. */
-async function fetchClosedIssues(octokit: OctokitRaw, period: Period): Promise<Source[]> {
+/** Closed issues — search by closed range, then half-open client-side
+ * filter (same boundary contract as opened). */
+async function fetchClosedIssues(octokit: OctokitRaw, period: Period): Promise<CappedFetch> {
   const q = [
     "is:issue",
     "is:closed",
     `repo:${env.GITHUB_ORG}/${env.GITHUB_REPO}`,
     `closed:${period.start}..${period.end}`,
   ].join(" ");
-  const rows = await listAll(octokit, "GET /search/issues", { q, per_page: 100 }, 1000);
+  const { rows, truncated } = await listAll(
+    octokit,
+    "GET /search/issues",
+    { q, per_page: 100 },
+    1000,
+  );
   const out: Source[] = [];
   for (const raw of rows) {
     const r = asObject(raw);
     if (!r) continue;
+    const closedAt = asString(r.closed_at);
+    if (!within(closedAt, period)) continue;
     const number = asNumber(r.number);
     const url = asString(r.html_url);
     if (number === null || url === null) continue;
@@ -536,22 +662,36 @@ async function fetchClosedIssues(octokit: OctokitRaw, period: Period): Promise<S
       meta: {
         number,
         author: asString(user?.login) ?? null,
-        closed_at: asString(r.closed_at),
+        closed_at: closedAt,
       },
     });
   }
-  return out;
+  return { sources: out, truncated };
 }
 
-/** Failed workflow runs — list endpoint; client-side window filter.
- * The runs endpoint has no server-side created-at filter; the
- * per_page=100 cap on recent runs is enough for our window. */
-async function fetchFailedRuns(octokit: OctokitRaw, period: Period): Promise<Source[]> {
-  const rows = await listAll(
+/** Failed workflow runs — list endpoint with server-side period filter.
+ *
+ * `/repos/{owner}/{repo}/actions/runs` supports a `created` qualifier
+ * (`YYYY-MM-DD..YYYY-MM-DD`) and a `status` filter. We use both:
+ * `created:start..end` aligns with the edition window; `status=completed`
+ * keeps the run set to finished runs (a failure conclusion only exists
+ * for completed runs). Client-side filter keeps only `failure`
+ * conclusions. The first page is capped at 100; if we hit that cap we
+ * surface it as truncated so counts are not presented as exhaustive. */
+async function fetchFailedRuns(octokit: OctokitRaw, period: Period): Promise<CappedFetch> {
+  const startDate = period.start.slice(0, 10);
+  const endDate = period.end.slice(0, 10);
+  const { rows, truncated } = await listAll(
     octokit,
     "GET /repos/{owner}/{repo}/actions/runs",
-    { owner: env.GITHUB_ORG, repo: env.GITHUB_REPO, per_page: 100 },
-    200,
+    {
+      owner: env.GITHUB_ORG,
+      repo: env.GITHUB_REPO,
+      per_page: 100,
+      status: "completed",
+      created: `${startDate}..${endDate}`,
+    },
+    100,
   );
   const out: Source[] = [];
   for (const raw of rows) {
@@ -576,12 +716,12 @@ async function fetchFailedRuns(octokit: OctokitRaw, period: Period): Promise<Sou
       },
     });
   }
-  return out;
+  return { sources: out, truncated };
 }
 
 /** Releases — list endpoint; client-side published-in-window filter. */
-async function fetchReleases(octokit: OctokitRaw, period: Period): Promise<Source[]> {
-  const rows = await listAll(
+async function fetchReleases(octokit: OctokitRaw, period: Period): Promise<CappedFetch> {
+  const { rows, truncated } = await listAll(
     octokit,
     "GET /repos/{owner}/{repo}/releases",
     { owner: env.GITHUB_ORG, repo: env.GITHUB_REPO, per_page: 100 },
@@ -607,7 +747,7 @@ async function fetchReleases(octokit: OctokitRaw, period: Period): Promise<Sourc
       meta: { tag, id, published_at: publishedAt },
     });
   }
-  return out;
+  return { sources: out, truncated };
 }
 
 // ── Counts + weekly metrics ─────────────────────────────────────────────
@@ -707,21 +847,8 @@ function countBy(sources: ReadonlyArray<Source>, kind: Source["kind"]): number {
   return n;
 }
 
-// ── Optional-result helper ───────────────────────────────────────────────
+// ── Reason formatting ───────────────────────────────────────────────────
 
-function unwrap(
-  settled: PromiseSettledResult<Source[]>,
-): { ok: true; value: Source[] } | { ok: false; availability: SourceAvailability } {
-  if (settled.status === "fulfilled") return { ok: true, value: settled.value };
-  const reason = settled.reason;
-  const message = reason instanceof Error ? reason.message : String(reason);
-  return {
-    ok: false,
-    availability: { status: "unavailable", reason: message },
-  };
+function reasonMessage(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
 }
-
-// `periodForKind` is exported so the editor can assert inputs against
-// the canonical window; not currently used elsewhere but kept for
-// future per-kind surface routing (e.g. filtering open alerts).
-void periodForKind;

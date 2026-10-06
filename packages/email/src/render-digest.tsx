@@ -7,9 +7,16 @@
  *   - sections[].items[].text (annotation) + .source.{id, kind, url, title}
  *
  * The model never supplies URLs or titles. The renderer combines the
- * annotation with the corpus-derived URL + title. Items with no source
- * (calm period) are rendered as a quiet-period note; availability
- * warnings come from collection metadata, no unrelated citation.
+ * annotation with the corpus-derived URL + title.
+ *
+ * **Quiet-period truth source.** A period is announced as quiet only
+ * when the CORPUS supports that conclusion — i.e. authoritative counts
+ * are zero across every collected kind AND no source reported an
+ * availability issue. An empty `sections[]` from the model against a
+ * non-empty corpus means the model returned nothing despite collected
+ * activity; the renderer surfaces this as "no editorial items" while
+ * the counts line keeps the authoritative evidence. Availability
+ * warnings are always displayed.
  *
  * Plain-text output mirrors the HTML — annotations + URLs + titles are
  * present, not only the URL list.
@@ -68,27 +75,43 @@ export interface RenderedDigest {
   readonly text: string;
 }
 
-function isQuiet(sections: ReadonlyArray<DigestSection>): boolean {
-  const totalItems = sections.reduce((n, s) => n + s.items.length, 0);
-  return totalItems === 0;
+/**
+ * A period is quiet when authoritative corpus counts are zero across
+ * every kind AND no source reported an availability issue. An empty
+ * `sections[]` from the model against a non-empty corpus is NOT quiet —
+ * it's "model returned no editorial items"; the renderer keeps the
+ * authoritative counts visible so the operator can see what the model
+ * ignored.
+ */
+function isQuiet(edition: DigestEdition): boolean {
+  if (edition.availability.length > 0) return false;
+  const counts = edition.counts;
+  const numericKeys = Object.values(counts).filter(
+    (v): v is number => typeof v === "number" && Number.isFinite(v),
+  );
+  if (numericKeys.length === 0) return true;
+  return numericKeys.every((n) => n === 0);
+}
+
+function editorialItemsCount(sections: ReadonlyArray<DigestSection>): number {
+  return sections.reduce((n, s) => n + s.items.length, 0);
 }
 
 export async function renderDigest(input: RenderDigestInput): Promise<RenderedDigest> {
   const statusByKind = input.statusByKind ?? DEFAULT_STATUS_BY_KIND;
-  const quiet = isQuiet(input.sections);
+  const quiet = isQuiet(input.edition);
+  const editorialCount = editorialItemsCount(input.sections);
 
   const tree = (
     <EmailShell subject={input.subject} header={input.header} footer={input.footer}>
-      <EditionSummary edition={input.edition} quiet={quiet} />
+      <EditionSummary edition={input.edition} quiet={quiet} editorialCount={editorialCount} />
       {input.sections.map((section, i) => (
         <div key={`${input.kind}-${section.kind}-${i}`}>
           <SectionBlock kind={input.kind} section={section} statusByKind={statusByKind} />
           <ReferencesList items={section.items} />
         </div>
       ))}
-      {!quiet && input.edition.availability.length > 0 ? (
-        <AvailabilityBlock availability={input.edition.availability} />
-      ) : null}
+      <AvailabilityBlock availability={input.edition.availability} />
     </EmailShell>
   );
   const html = await render(tree);
@@ -103,7 +126,7 @@ export async function renderDigest(input: RenderDigestInput): Promise<RenderedDi
       return `${section.kind.toUpperCase()}${items ? `\n${items}` : ""}`;
     })
     .join("\n\n");
-  const editionText = editionSummaryText(input.edition, quiet);
+  const editionText = editionSummaryText(input.edition, quiet, editorialCount);
   const text = `${sectionText}${sectionText ? "\n\n" : ""}${editionText}\n\n${input.footer}`;
   return { html, text };
 }
@@ -114,12 +137,13 @@ function SectionBlock(props: {
   statusByKind: Record<SectionKind, RagStatus>;
 }): React.ReactElement {
   const { section, kind, statusByKind } = props;
-  const itemsText = section.items.map((i) => i.text).join(" / ");
+  const n = section.items.length;
+  const summary = n === 0 ? "No items" : `${n} item${n === 1 ? "" : "s"}`;
   if (kind === "daily") {
     return (
       <DigestBlock
         kind={section.kind as SectionKind}
-        text={itemsText || "(no items)"}
+        text={summary}
         status={statusByKind[section.kind as SectionKind]}
       />
     );
@@ -127,14 +151,22 @@ function SectionBlock(props: {
   return (
     <>
       <h2 style={{ textTransform: "uppercase", marginBottom: 4 }}>{section.kind}</h2>
-      <p style={{ marginTop: 0 }}>{itemsText || "(no items)"}</p>
+      <p style={{ marginTop: 0 }}>{summary}</p>
     </>
   );
 }
 
-function EditionSummary(props: { edition: DigestEdition; quiet: boolean }): React.ReactElement {
-  const { edition, quiet } = props;
+function EditionSummary(props: {
+  edition: DigestEdition;
+  quiet: boolean;
+  editorialCount: number;
+}): React.ReactElement {
+  const { edition, quiet, editorialCount } = props;
   const wm = edition.weeklyMetrics;
+  const countsNonZero =
+    Object.values(edition.counts).filter(
+      (v) => typeof v === "number" && Number.isFinite(v) && v !== 0,
+    ).length > 0;
   return (
     <div
       style={{
@@ -151,6 +183,11 @@ function EditionSummary(props: { edition: DigestEdition; quiet: boolean }): Reac
         <p style={{ margin: 0, fontWeight: 600 }}>
           No activity recorded for this period. Counts below confirm zero in every GitHub category
           the digest tried to fetch.
+        </p>
+      ) : countsNonZero && editorialCount === 0 ? (
+        <p style={{ margin: 0, fontWeight: 600, color: "#9a6700" }}>
+          The model returned no editorial items despite collected activity. Authoritative counts
+          below are not affected; this digest may be incomplete.
         </p>
       ) : null}
       <p style={{ margin: "4px 0" }}>
@@ -216,7 +253,11 @@ function AvailabilityBlock(props: {
   );
 }
 
-function editionSummaryText(edition: DigestEdition, quiet: boolean): string {
+function editionSummaryText(
+  edition: DigestEdition,
+  quiet: boolean,
+  editorialCount: number,
+): string {
   const lines: string[] = [];
   lines.push(
     `Period: ${edition.period.start} → ${edition.period.end} UTC (${edition.period.label})`,
@@ -254,9 +295,17 @@ function editionSummaryText(edition: DigestEdition, quiet: boolean): string {
       "Data-source availability: " + edition.availability.map((a) => a.reason).join(" | "),
     );
   }
+  const countsNonZero =
+    Object.values(edition.counts).filter(
+      (v) => typeof v === "number" && Number.isFinite(v) && v !== 0,
+    ).length > 0;
   if (quiet) {
     lines.unshift(
       "No activity recorded for this period. Counts above confirm zero in every GitHub category the digest tried to fetch.",
+    );
+  } else if (countsNonZero && editorialCount === 0) {
+    lines.unshift(
+      "The model returned no editorial items despite collected activity. Authoritative counts below are not affected; this digest may be incomplete.",
     );
   }
   return lines.join("\n");
