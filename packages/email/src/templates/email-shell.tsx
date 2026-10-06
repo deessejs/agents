@@ -10,9 +10,8 @@
  *
  * **Security:** every user-supplied string passed via JSX is
  * automatically escaped by React (text nodes are HTML-escaped before
- * render). The `BANNED` check (see @workspace/format) runs on the
- * raw markdown text BEFORE render to catch XSS payloads that React's
- * escape would silently render as text (e.g. `<script>alert(1)</script>`).
+ * render). XSS payloads are inert by construction; no separate
+ * allowlist regex is needed.
  */
 import * as React from "react";
 import { Body, Container, Head, Html, Preview, Section, Text } from "react-email";

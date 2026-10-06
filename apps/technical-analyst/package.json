@@ -13,18 +13,15 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "catalog:",
     "@ai-sdk/minimax": "catalog:",
-    "@vercel/kv": "catalog:",
+    "@ai-sdk/provider": "catalog:",
     "@workspace/email": "workspace:*",
     "@workspace/env": "workspace:*",
-    "@workspace/format": "workspace:*",
     "@workspace/github": "workspace:*",
-    "@workspace/llm": "workspace:*",
-    "@workspace/observability": "workspace:*",
     "ai": "catalog:",
     "eve": "catalog:",
-    "p-limit": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "react-email": "catalog:",
     "resend": "catalog:",
     "zod": "catalog:"

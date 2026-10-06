@@ -16,10 +16,8 @@ allowBuilds:
 #   - `^` ranges for build / test tooling: turbo, typescript, oxlint, oxfmt,
 #     vitest, @types/node. Minor bumps are cheap and rarely break us.
 #   - Exact pins for runtime libraries where ABI breaks are routine: the
-#     ai-sdk family, @octokit/* (core only), pino, gpt-tokenizer, zod.
+#     ai-sdk family, @octokit/* (core only), pino, zod.
 #     Pinning forces a deliberate bump on every minor.
-#   - `^` is allowed for runtime deps where the upstream policy is
-#     SemVer-strict: @opentelemetry/*, @octokit/types, @vercel/kv.
 # ----------------------------------------------------------------------------
 catalog:
   # Build / test tooling (caret-prefix OK; minor bumps are safe)
@@ -37,19 +35,6 @@ catalog:
   # package; a minor bump can reshape parsing semantics. Pinned.
   zod: ^4.1.8
 
-  # Formatters (Phase 2 — @workspace/format).
-  # date-fns majors ship breaking changes (v2→v3 dropped default exports;
-  # v3→v4 introduced time-zone support). Pinned to ^4 (caret OK because
-  # date-fns honors it strictly). mdast-util-to-hast and hast-util-to-html
-  # are caret-pinned — both follow semver-strict unified collective policy.
-  date-fns: ^4.4.0
-  mdast-util-to-hast: ^13.2.1
-  hast-util-to-html: ^9.0.5
-  unified: ^11.0.5
-  remark-parse: ^11.0.0
-  "@types/hast": ^3.0.5
-  "@types/mdast": ^4.0.4
-
   # AI SDK stack.
   # Versions pinned because ai-sdk majors frequently break ABI without
   # bumping major (e.g. @ai-sdk/provider@4.x and @ai-sdk/provider-utils@5.x
@@ -57,15 +42,13 @@ catalog:
   # provider package itself is the integration surface every other
   # @ai-sdk/* aligns against.
   ai: 7.0.127
-  "@ai-sdk/anthropic": 4.0.71
   "@ai-sdk/minimax": 3.0.48
+  "@ai-sdk/provider": 4.0.21
   "@ai-sdk/provider-utils": 5.0.53
-  gpt-tokenizer: ^2.5.0
 
   # Observability (pinned — otel SDK majors ship breaking changes;
   # @opentelemetry/* stays caret because their published majors are reliable)
   pino: ^9.5.0
-  pino-pretty: ^11.3.0
   "@opentelemetry/api": ^1.9.0
   "@opentelemetry/sdk-node": ^0.222.0
   "@opentelemetry/exporter-trace-otlp-http": ^0.222.0
@@ -80,9 +63,6 @@ catalog:
   "@octokit/plugin-retry": 8.1.1
   "@octokit/types": ^18.0.0
 
-  # Vercel KV (used by env, observability, runtime for state/dedup)
-  "@vercel/kv": ^3.0.0
-
   # Email (Phase 2 — @workspace/email).
   # resend: caret (Resend majors are rare and the SDK is small + stable).
   # react-email: caret (the v6 line unifies @react-email/components +
@@ -90,21 +70,19 @@ catalog:
   # package is being deprecated, so we use the new one).
   # react/react-dom: caret (peer deps of react-email — v18.2.0+ or v19).
   resend: ^6.32.0
-  react-email: ^6.9.1
-  react: ^19.0.0
-  react-dom: ^19.0.0
-  "@types/react": ^19.0.0
-  "@types/react-dom": ^19.0.0
+  react-email: ^6.11.0
+  react: ^19.3.0
+  react-dom: ^19.3.0
+  "@types/react": ^19.3.0
+  "@types/react-dom": ^19.3.0
 
-  # eve framework (Phase 2 — apps/technical-analyst).
+  # eve framework (apps/technical-analyst).
   # Pre-1.0, released every few weeks. Caret OK; the runtime doc's
-  # snippets reference `eve/schedules`, `eve/skills`, and the
+  # snippets reference `eve/schedules`, `eve/tools`, and the
   # `defineSchedule({ cron, markdown })` fire-and-forget form.
   # Upgrade policy: every minor bump requires re-reading the runtime
-  # doc snippets in temp/agent/technical-analyst.md against the new
-  # eve API (the framework is still 0.x).
-  eve: ^0.68.0
+  # doc snippets against the new eve API (the framework is still 0.x).
+  eve: ^0.71.2
 
-  # Concurrency (Phase 2 — apps/technical-analyst).
-  # p-limit: caret (no breaking changes; library is small + stable).
-  p-limit: ^6.1.0
+minimumReleaseAgeExclude:
+  - eve@0.71.2

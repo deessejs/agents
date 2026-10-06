@@ -1,0 +1,53 @@
+[
+  {
+    "number": 7,
+    "state": "open",
+    "severity": "critical",
+    "ecosystem": "npm",
+    "package": {
+      "name": "lodash",
+      "ecosystem": "npm"
+    },
+    "vulnerable_version_range": "<4.17.21",
+    "patched_version": "4.17.21",
+    "created_at": "2026-10-02T08:00:00Z",
+    "updated_at": "2026-10-05T08:00:00Z",
+    "html_url": "https://github.com/deessejs/agents/security/dependabot/7",
+    "fixed_at": null,
+    "dismissed_at": null
+  },
+  {
+    "number": 8,
+    "state": "open",
+    "severity": "high",
+    "ecosystem": "npm",
+    "package": {
+      "name": "axios",
+      "ecosystem": "npm"
+    },
+    "vulnerable_version_range": "<1.6.0",
+    "patched_version": "1.6.0",
+    "created_at": "2026-09-30T08:00:00Z",
+    "updated_at": "2026-10-04T08:00:00Z",
+    "html_url": "https://github.com/deessejs/agents/security/dependabot/8",
+    "fixed_at": null,
+    "dismissed_at": null
+  },
+  {
+    "number": 9,
+    "state": "fixed",
+    "severity": "low",
+    "ecosystem": "npm",
+    "package": {
+      "name": "minimist",
+      "ecosystem": "npm"
+    },
+    "vulnerable_version_range": "<1.2.6",
+    "patched_version": "1.2.6",
+    "created_at": "2026-09-15T08:00:00Z",
+    "updated_at": "2026-09-25T08:00:00Z",
+    "html_url": "https://github.com/deessejs/agents/security/dependabot/9",
+    "fixed_at": "2026-09-25T08:00:00Z",
+    "dismissed_at": null
+  }
+]

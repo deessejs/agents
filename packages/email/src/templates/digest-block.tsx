@@ -2,8 +2,7 @@
  * A single digest section block (TL;DR, Shipped, Risks, Watchlist).
  *
  * Renders a section header + a text body. React auto-escapes the text
- * on render; the caller is expected to have run the BANNED check
- * (see @workspace/format) on the raw markdown BEFORE handing it here.
+ * on render — XSS payloads in the text are inert by construction.
  *
  * Per the runtime doc's "editorial principles" (BLUF, so-what, quantify,
  * no "all green"):

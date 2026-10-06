@@ -1,30 +1,27 @@
 /**
- * eve `agent.ts` for the Technical Analyst.
+ * eve manifest for the Technical Analyst.
  *
- * `defineAgent` from `eve` configures the agent's runtime. The actual
- * workflow (`runDailyDigest`, `runWeeklyRecap`) is invoked by the
- * schedules under `agent/schedules/`; this file is the agent's
- * *manifest*, not its entry point.
+ * One agent, two native schedules, two real business tools. The model
+ * is locked to MiniMax (`@ai-sdk/minimax`) per the Phase 2 plan.
  *
- * Reference: https://eve.dev/docs/reference/typescript-api (defineAgent)
+ * `defaultTools: false` turns off eve's optional defaults (bash,
+ * read_file, write_file, web_fetch, web_search, load_skill, agent).
+ * The agent's only authored tools are `collect_activity` and
+ * `submit_digest`. Connection-driven tools stay available when a
+ * connection is configured (none today).
+ *
+ * Vercel Cron entries are generated from `agent/schedules/*.ts` —
+ * no manual `vercel.json` cron block is needed.
  */
 import { defineAgent } from "eve";
+import type { LanguageModelV4 } from "@ai-sdk/provider";
+import { minimax } from "@ai-sdk/minimax";
+
 import { env } from "./env.ts";
 
-/**
- * Model registry. Phase 2 ships a single model; the runtime doc
- * §4.4 specifies the v7 AI SDK's `telemetry` + `functionId` shape.
- *
- * Future: add a `@ai-sdk/bedrock` fallback for EU compliance (locked
- * 2026-10-06 — default is MiniMax US per the Phase 2 plan).
- */
-const modelId = env.LLM_MODEL_ID; // e.g. "minimax-m3"
+const model: LanguageModelV4 = minimax(env.LLM_MODEL_ID);
 
 export default defineAgent({
-  /**
-   * The model id is read at boot from env so per-deploy swaps are
-   * zero-config. The route handler in `app/api/cron/` sets its own
-   * Vercel `maxDuration` (60 s for daily, 90 s for weekly).
-   */
-  model: modelId,
+  model,
+  defaultTools: false,
 });

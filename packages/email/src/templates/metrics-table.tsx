@@ -8,7 +8,7 @@
  */
 import * as React from "react";
 import { Heading, Section } from "react-email";
-import { formatNumber } from "@workspace/format";
+import { formatNumber } from "../format-number.ts";
 
 import { tokens } from "./tokens.ts";
 import type { Theme } from "./tokens.ts";

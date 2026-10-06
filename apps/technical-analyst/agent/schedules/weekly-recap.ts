@@ -1,32 +1,28 @@
 /**
- * Weekly digest schedule.
+ * Weekly recap schedule.
  *
- * Per the runtime doc §4.2, the weekly digest is structurally similar
- * to the daily but with a 5-day window and 7 sections (TL;DR, Shipped,
- * In progress, Risks, Metrics, Trends, Next). The `computeWeeklyMetrics`
- * step in `lib/metrics.ts` is the only addition.
+ * `markdown` form: a fire-and-forget prompt the agent executes on its
+ * own clock. The agent is expected to:
+ *   1. Call `collect_activity({ kind: "weekly" })`. The window covers
+ *      the most recent Monday 00:00 UTC → now (floored to 5 days).
+ *   2. Synthesize a 7-section weekly report citing corpus ids.
+ *   3. Call `submit_digest({ kind: "weekly", report })`.
  *
- * Skip-if-empty: if no merged PRs, no incidents, and no alerts in the
- * window, the weekly digest sends a 200-word "low activity" digest
- * instead of padding.
+ * `cron` is `0 16 * * 5` (Friday 18:00 Paris summer / 17:00 Paris
+ * winter — locked in the 2026-10-06 plan).
  */
 import { defineSchedule } from "eve/schedules";
-import { env } from "../env.ts";
 
-/**
- * Cron expression (UTC). Default "0 16 * * 5" = Friday 18:00 Paris
- * summer, 17:00 Paris winter.
- */
 export default defineSchedule({
-  cron: env.WEEKLY_CRON,
+  cron: "0 16 * * 5",
   markdown: [
-    "Run the weekly digest workflow for env.GITHUB_ORG.",
-    "1. Same boot + kill-switch + last-successful-run dedup as daily (see schedules/daily-digest.ts).",
-    "2. Compute Monday → Friday window in env.DAILY_LOCAL_TIMEZONE.",
-    "3. Call lib/fetch.ts (same endpoints as daily, plus getCommitActivity for week-over-week).",
-    "4. Call lib/metrics.ts → WeeklyMetrics (DORA, throughput, aging, week-over-week deltas).",
-    "5. If metrics indicate a 'low activity' week, send a 200-word stub digest (skip metrics section).",
-    "6. Otherwise, call runWeeklyDigest() from lib/digest.ts with the full 7-section schema.",
-    "7. On success, write last_successful_run:weekly = today (48h TTL).",
+    "Compose the weekly engineering recap for the Mon-Fri period.",
+    "1. Call `collect_activity({ kind: \"weekly\" })` first. The window covers Monday 00:00 UTC → now and is at least 5 days long.",
+    "2. Write a 7-section report: TL;DR, Shipped, In progress, Risks & blockers, Key metrics, Trends, Decisions needed / Next week focus.",
+    "3. Every item must reference an `id` from the corpus. The submit_digest tool rejects fabricated references.",
+    "4. For the Key metrics section, calculate the numbers in code (e.g. count of merged_pr sources, count of dependabot_alert sources). Do not invent metrics.",
+    "5. Call `submit_digest({ kind: \"weekly\", report })`.",
+    "6. If `collect_activity` returns zero sources for the period, call the `no_reply` opt-in tool instead of submit_digest — a quiet week is itself the report.",
+    "Never fabricate PR numbers, URLs, authors, commit counts, or DORA metrics. React auto-escapes any text you produce, so do not pre-escape.",
   ].join("\n"),
 });

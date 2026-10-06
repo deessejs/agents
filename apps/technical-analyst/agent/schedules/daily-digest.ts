@@ -1,38 +1,27 @@
 /**
  * Daily digest schedule.
  *
- * Per the runtime doc §4.1, this schedule is intentionally tiny: it
- * delegates to `runDailyDigest()` in `lib/digest.ts`, which is the
- * actual workflow. This separation keeps the schedule testable (you can
- * call `runDailyDigest()` from a test without firing a cron).
+ * `markdown` form: a fire-and-forget prompt the agent executes on its
+ * own clock. The agent is expected to:
+ *   1. Call `collect_activity({ kind: "daily" })`.
+ *   2. Synthesize a daily report citing corpus ids.
+ *   3. Call `submit_digest({ kind: "daily", report })`.
  *
- * eve generates a Vercel Cron entry from this `cron` field; the
- * corresponding route handler at `app/api/cron/daily-digest/route.ts`
- * is the `CRON_SECRET`-guarded entry point for the actual HTTP
- * request Vercel sends.
+ * The agent owns synthesis; this prompt declares intent. Vercel Cron
+ * evaluates the cron expression in UTC (`0 20 * * *` = 22:00 Paris
+ * summer / 21:00 Paris winter — locked in the 2026-10-06 plan).
  */
 import { defineSchedule } from "eve/schedules";
-import { env } from "../env.ts";
 
-/**
- * Cron expression (UTC). Default "0 20 * * *" = 22:00 Paris summer /
- * 21:00 Paris winter. The ±1h DST drift is accepted per the locked
- * decision (temp/technical-analyst-agent.md §12 #5).
- */
 export default defineSchedule({
-  cron: env.DAILY_CRON,
-  /**
-   * Fire-and-forget prompt. eve compiles this into the manifest and
-   * turns it into the cron task's body at runtime. The actual
-   * workflow is implemented in `lib/digest.ts` and called via the
-   * route handler.
-   */
+  cron: "0 20 * * *",
   markdown: [
-    "Run the daily digest workflow for env.GITHUB_ORG.",
-    "1. Validate env (already done at boot).",
-    "2. Check the kill-switch (kv.get('agents:paused')) — if true, abort with an info log.",
-    "3. Check last_successful_run:daily in KV — if today's UTC date is already recorded, abort with an info log.",
-    "4. Call runDailyDigest({ kind: 'daily' }) from lib/digest.ts.",
-    "5. On success, write last_successful_run:daily = today (48h TTL) and emit the digest id in the root OTel span.",
+    "Compose the daily engineering digest for the previous UTC day.",
+    "1. Call `collect_activity({ kind: \"daily\" })` first. The result is the authoritative source list.",
+    "2. Write a 4-section report: TL;DR, Shipped, Risks & blockers, Watchlist for tomorrow.",
+    "3. Every item must reference an `id` from the corpus. The submit_digest tool rejects fabricated references.",
+    "4. Call `submit_digest({ kind: \"daily\", report })`. Pass preview=true only when the operator asks for a preview run.",
+    "5. If `collect_activity` returns zero sources for the period, call submit_digest with a single TL;DR section stating the period had no activity — do not invent work.",
+    "Never fabricate PR numbers, URLs, authors, or commit counts. React auto-escapes any text you produce, so do not pre-escape.",
   ].join("\n"),
 });
