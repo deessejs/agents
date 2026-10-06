@@ -55,3 +55,5 @@ temp/
 
 # Claude Code local config (per-developer, not project-tracked)
 .claude/
+# Eve framework build output
+.eve/

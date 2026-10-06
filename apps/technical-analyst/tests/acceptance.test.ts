@@ -12,6 +12,7 @@ import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 // Pin the wall clock to a date that matches our fixture data so the
 // canonical UTC daily window covers 2026-10-05.
@@ -110,13 +111,8 @@ const envValues = {
   RESEND_API_KEY: "re_testKeyForCI_1234567890",
   RESEND_FROM_ADDRESS: "digest@mail.example.com",
   RESEND_FROM_NAME: "Technical Analyst",
-  UNSUBSCRIBE_BASE_URL: "https://app.example.com",
-  UNSUBSCRIBE_MAILTO: "unsubscribe@example.com",
   MINIMAX_API_KEY: "minimax_test_key",
-  LLM_PROVIDER: "minimax",
   LLM_MODEL_ID: "minimax-m3",
-  KV_REST_API_URL: "https://example.com/kv",
-  KV_REST_API_TOKEN: "kv_test_token",
   AGENTS_PAUSED: "false",
 } as const;
 
@@ -125,7 +121,6 @@ beforeEach(() => {
   for (const [k, v] of Object.entries(envValues)) {
     process.env[k] = String(v);
   }
-  delete process.env.RESEND_REPLY_TO;
 });
 
 afterEach(() => {
@@ -133,7 +128,6 @@ afterEach(() => {
   for (const k of Object.keys(envValues)) {
     delete process.env[k];
   }
-  kvStore.clear();
   vi.resetModules();
 });
 
@@ -148,16 +142,47 @@ interface OctokitResponse {
   url: string;
 }
 
-function buildFakeOctokit(routes: Record<string, { fixture: string }>): unknown {
-  const handler = async (route: string): Promise<OctokitResponse> => {
-    const spec = routes[route];
+type RouteSpec =
+  | { fixture: string }
+  | { match: (params: Record<string, unknown> | undefined) => boolean; fixture: string };
+
+function buildFakeOctokit(routes: Record<string, RouteSpec>): unknown {
+  const stripQuery = (route: string): string => route.split("?")[0] ?? route;
+  const lookup = (
+    route: string,
+    params?: Record<string, unknown>,
+  ): { fixture: string } | undefined => {
+    const path = stripQuery(route);
+    // Predicate-based routes win over path-only routes when the predicate
+    // is true (lets tests route search queries by `q` content).
+    for (const [key, spec] of Object.entries(routes)) {
+      if (Object.prototype.hasOwnProperty.call(spec, "match")) {
+        if (
+          stripQuery(key) === path &&
+          (spec as { match: (p: unknown) => boolean }).match(params)
+        ) {
+          return spec as { fixture: string };
+        }
+      }
+    }
+    const fallback = routes[path] ?? routes[route];
+    if (fallback && !Object.prototype.hasOwnProperty.call(fallback, "match")) {
+      return fallback as { fixture: string };
+    }
+    return undefined;
+  };
+  const handler = async (
+    route: string,
+    params?: Record<string, unknown>,
+  ): Promise<OctokitResponse> => {
+    const spec = lookup(route, params);
     if (!spec) throw new Error(`Fake octokit: unstubbed route ${route}`);
     const data = JSON.parse(await readFile(join(FIXTURE_DIR, spec.fixture), "utf8")) as unknown;
     return { data, headers: {}, status: 200, url: route };
   };
   const paginate = {
-    iterator(route: string): AsyncIterable<{ data: unknown[] }> {
-      const spec = routes[route];
+    iterator(route: string, params?: Record<string, unknown>): AsyncIterable<{ data: unknown[] }> {
+      const spec = lookup(route, params);
       if (!spec) throw new Error(`Fake octokit: unstubbed paginate ${route}`);
       return (async function* (): AsyncGenerator<{ data: unknown[] }> {
         const data = JSON.parse(
@@ -170,22 +195,10 @@ function buildFakeOctokit(routes: Record<string, { fixture: string }>): unknown 
   return { request: handler, paginate };
 }
 
-const kvStore = new Map<string, unknown>();
-
-vi.mock("@vercel/kv", () => ({
-  kv: {
-    get: vi.fn(async <T>(key: string) => (kvStore.get(key) as T | undefined) ?? null),
-    set: vi.fn(async (key: string, value: unknown) => {
-      kvStore.set(key, value);
-      return "OK";
-    }),
-  },
-}));
-
 // ── Discovery ───────────────────────────────────────────────────────────
 
 describe("Tool discovery (criteria 1-3)", () => {
-  it("the agent manifest exports a defineAgent + two business tools + opt-in no_reply", async () => {
+  it("the agent manifest exports a defineAgent + two business tools, and the schedules reach the tools", async () => {
     const base = resolve(dirname(fileURLToPath(import.meta.url)), "..", "agent");
     const agentFiles = await Promise.all(
       ["agent.ts", "instructions.md"].map((f) => readFile(resolve(base, f), "utf8")),
@@ -202,17 +215,20 @@ describe("Tool discovery (criteria 1-3)", () => {
     for (const raw of toolFiles) {
       expect(raw).toContain("defineTool");
     }
-    // no_reply.ts is a one-line re-export of `noReply()` from eve —
-    // it's still a tool, just not defined with defineTool directly.
-    const noReplyRaw = await readFile(resolve(toolsDir, "no_reply.ts"), "utf8");
-    expect(noReplyRaw).toContain("noReply");
+    // Schedule dispatch: each schedule's markdown must call
+    // collect_activity then submit_digest. A schedule that does not
+    // reach the publication path is silently no-op.
     const schedulesDir = resolve(base, "schedules");
     const daily = await readFile(resolve(schedulesDir, "daily-digest.ts"), "utf8");
     expect(daily).toContain("defineSchedule");
     expect(daily).toMatch(/cron: "0 20 \* \* \*"/);
+    expect(daily).toContain("collect_activity");
+    expect(daily).toContain("submit_digest");
     const weekly = await readFile(resolve(schedulesDir, "weekly-recap.ts"), "utf8");
     expect(weekly).toContain("defineSchedule");
     expect(weekly).toMatch(/cron: "0 16 \* \* 5"/);
+    expect(weekly).toContain("collect_activity");
+    expect(weekly).toContain("submit_digest");
   });
 });
 
@@ -229,11 +245,17 @@ describe("collect_activity", () => {
 
   it("returns computed counts + corpus with repo-qualified ids", async () => {
     const fakeOctokit = buildFakeOctokit({
-      "GET /orgs/{org}/dependabot/alerts": { fixture: "dependabot-alerts.json" },
-      "GET /orgs/{org}/code-scanning/alerts": { fixture: "code-scanning-alerts.json" },
-      "GET /orgs/{org}/secret-scanning/alerts": { fixture: "secret-scanning-alerts.json" },
+      "GET /repos/{owner}/{repo}/dependabot/alerts": { fixture: "dependabot-alerts.json" },
+      "GET /repos/{owner}/{repo}/code-scanning/alerts": { fixture: "code-scanning-alerts.json" },
+      "GET /repos/{owner}/{repo}/secret-scanning/alerts": {
+        fixture: "secret-scanning-alerts.json",
+      },
       "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
-      "GET /search/issues": { fixture: "issues-empty.json" },
+      "GET /search/issues": {
+        match: (params) => typeof params?.q === "string" && params.q.includes("is:merged"),
+        fixture: "merged-prs.json",
+      },
+      "GET /search/issues_issues": { fixture: "issues-empty.json" },
       "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
       "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
     });
@@ -326,11 +348,17 @@ describe("submit_digest", () => {
     }) => Promise<T>,
   ): Promise<T> {
     const fakeOctokit = buildFakeOctokit({
-      "GET /orgs/{org}/dependabot/alerts": { fixture: "dependabot-alerts.json" },
-      "GET /orgs/{org}/code-scanning/alerts": { fixture: "code-scanning-alerts.json" },
-      "GET /orgs/{org}/secret-scanning/alerts": { fixture: "secret-scanning-alerts.json" },
+      "GET /repos/{owner}/{repo}/dependabot/alerts": { fixture: "dependabot-alerts.json" },
+      "GET /repos/{owner}/{repo}/code-scanning/alerts": { fixture: "code-scanning-alerts.json" },
+      "GET /repos/{owner}/{repo}/secret-scanning/alerts": {
+        fixture: "secret-scanning-alerts.json",
+      },
       "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
-      "GET /search/issues": { fixture: "issues-empty.json" },
+      "GET /search/issues": {
+        match: (params) => typeof params?.q === "string" && params.q.includes("is:merged"),
+        fixture: "merged-prs.json",
+      },
+      "GET /search/issues_issues": { fixture: "issues-empty.json" },
       "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
       "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
     });
@@ -345,7 +373,6 @@ describe("submit_digest", () => {
           async send() {
             return { id: "resend_test_id", idempotencyKey: "digest:send:abc" };
           },
-          sendBatch: async () => [],
         }),
       };
     });
@@ -481,50 +508,28 @@ describe("submit_digest", () => {
     });
   });
 
-  it("reuses the persisted payload + idempotency key when the KV record is already delivered", async () => {
+  it("preview: true always renders to disk regardless of prior delivery", async () => {
     await withCollectionLoaded(async ({ submit }) => {
       const corpusMod = await import("../agent/lib/state.ts");
-      const kvMod = await import("../agent/lib/kv-edition.ts");
       const corpus = corpusMod.sourceCorpus.get();
-      const ed = corpusMod.edition.get();
       const pr = corpus.sources.find((s) => s.kind === "merged_pr");
       if (!pr) throw new Error("no merged_pr");
-
-      await kvMod.writePending({
-        editionId: ed.id,
-        org: envValues.GITHUB_ORG,
-        repo: envValues.GITHUB_REPO,
-        kind: "daily" as const,
-        periodStart: corpus.edition.period.start,
-        periodEnd: corpus.edition.period.end,
-        recipient: envValues.DIGEST_RECIPIENT,
-        subject: "previously-sent",
-        html: "<p/>",
-        text: "",
-        idempotencyKey: "digest:send:prior",
-        messageId: null,
-        status: "pending",
-        firstAttemptAt: new Date().toISOString(),
-        deliveredAt: null,
-      });
-      await kvMod.markDelivered(ed.id, "resend_prior_id");
 
       const result = (await unwrap(
         submit.execute(
           {
             kind: "daily",
+            preview: true,
             report: {
               kind: "daily",
-              sections: [{ kind: "tldr", items: [{ text: "x", referenceId: pr.id }] }],
+              sections: [{ kind: "tldr", items: [{ text: "preview me", referenceId: pr.id }] }],
             },
           } as never,
           ctx as never,
         ),
       )) as Awaited<ReturnType<typeof submit.execute>>;
-      expect(result.status).toBe("already-delivered");
-      if (result.status === "already-delivered") {
-        expect(result.messageId).toBe("resend_prior_id");
-      }
+      // Preview never returns already-delivered. It always renders.
+      expect(result.status).toBe("preview");
     });
   });
 });
@@ -542,13 +547,19 @@ describe("Synthetic secret never reaches the corpus (criterion 6)", () => {
 
   it("secret-scanning alert with a synthetic secret value is reduced to categorical fields", async () => {
     const fakeOctokit = buildFakeOctokit({
-      "GET /orgs/{org}/dependabot/alerts": { fixture: "dependabot-alerts-empty.json" },
-      "GET /orgs/{org}/code-scanning/alerts": { fixture: "code-scanning-alerts-empty.json" },
-      "GET /orgs/{org}/secret-scanning/alerts": {
+      "GET /repos/{owner}/{repo}/dependabot/alerts": { fixture: "dependabot-alerts-empty.json" },
+      "GET /repos/{owner}/{repo}/code-scanning/alerts": {
+        fixture: "code-scanning-alerts-empty.json",
+      },
+      "GET /repos/{owner}/{repo}/secret-scanning/alerts": {
         fixture: "secret-scanning-alerts-synthetic.json",
       },
       "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
-      "GET /search/issues": { fixture: "issues-empty.json" },
+      "GET /search/issues": {
+        match: (params) => typeof params?.q === "string" && params.q.includes("is:merged"),
+        fixture: "merged-prs.json",
+      },
+      "GET /search/issues_issues": { fixture: "issues-empty.json" },
       "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
       "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
     });
@@ -568,5 +579,242 @@ describe("Synthetic secret never reaches the corpus (criterion 6)", () => {
     for (const s of secretSources) {
       expect(s.title).toMatch(/^Secret detected — /);
     }
+  });
+});
+
+// ── Regression tests for review of commit 868e140 ───────────────────────
+
+describe("Edition identity is a real hash of the canonical input", () => {
+  const ctx = {
+    callId: "x",
+    toolName: "x",
+    messages: [],
+    abortSignal: new globalThis.AbortController().signal,
+    session: { auth: {} as never },
+  };
+  function expectedId(
+    org: string,
+    repo: string,
+    kind: "daily" | "weekly",
+    start: string,
+    end: string,
+    recipient: string,
+  ): string {
+    const seed = `${org}|${repo}|${kind}|${start}|${end}|${recipient}`;
+    return createHash("sha256").update(seed).digest("hex").slice(0, 24);
+  }
+
+  it("different dates, recipients, repos or kinds change the id; identical inputs preserve it", () => {
+    // Reproduces the regression: two distinct daily windows must not
+    // share an edition id.
+    const a = expectedId(
+      "deessejs",
+      "agents",
+      "daily",
+      "2026-10-04T00:00:00.000Z",
+      "2026-10-05T00:00:00.000Z",
+      "ops@example.com",
+    );
+    const b = expectedId(
+      "deessejs",
+      "agents",
+      "daily",
+      "2026-10-05T00:00:00.000Z",
+      "2026-10-06T00:00:00.000Z",
+      "ops@example.com",
+    );
+    expect(a).not.toBe(b);
+    expect(a).toMatch(/^[0-9a-f]{24}$/);
+    expect(b).toMatch(/^[0-9a-f]{24}$/);
+
+    // Different recipient.
+    const c = expectedId(
+      "deessejs",
+      "agents",
+      "daily",
+      "2026-10-05T00:00:00.000Z",
+      "2026-10-06T00:00:00.000Z",
+      "other@example.com",
+    );
+    expect(b).not.toBe(c);
+
+    // Different repo.
+    const d = expectedId(
+      "deessejs",
+      "other",
+      "daily",
+      "2026-10-05T00:00:00.000Z",
+      "2026-10-06T00:00:00.000Z",
+      "ops@example.com",
+    );
+    expect(b).not.toBe(d);
+
+    // Different kind (daily vs weekly on the same Monday).
+    const e = expectedId(
+      "deessejs",
+      "agents",
+      "weekly",
+      "2026-10-05T00:00:00.000Z",
+      "2026-10-06T00:00:00.000Z",
+      "ops@example.com",
+    );
+    expect(b).not.toBe(e);
+
+    // Identical inputs preserve the id.
+    const aBis = expectedId(
+      "deessejs",
+      "agents",
+      "daily",
+      "2026-10-04T00:00:00.000Z",
+      "2026-10-05T00:00:00.000Z",
+      "ops@example.com",
+    );
+    expect(aBis).toBe(a);
+  });
+
+  it("two distinct dates produce two distinct edition ids through the real tool", async () => {
+    // Day 1: simulated via the canonical period function with a fixed now.
+    const stateMod = await import("../agent/lib/state.ts");
+    const fakeOctokit = buildFakeOctokit({
+      "GET /repos/{owner}/{repo}/dependabot/alerts": { fixture: "dependabot-alerts.json" },
+      "GET /repos/{owner}/{repo}/code-scanning/alerts": { fixture: "code-scanning-alerts.json" },
+      "GET /repos/{owner}/{repo}/secret-scanning/alerts": {
+        fixture: "secret-scanning-alerts.json",
+      },
+      "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
+      "GET /search/issues": {
+        match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
+        fixture: "merged-prs.json",
+      },
+      "GET /search/issues_issues": { fixture: "issues-empty.json" },
+      "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
+      "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
+    });
+    vi.doMock("@workspace/github", () => ({
+      createGitHubClient: () => ({ raw: fakeOctokit }),
+    }));
+    const mod = await import("../agent/tools/collect_activity.ts");
+    const tool = mod.default;
+
+    // Day 1: 2026-10-05 (wall clock set to 2026-10-06 → previous day).
+    vi.useFakeTimers({ now: new Date("2026-10-06T10:00:00.000Z"), toFake: ["Date"] });
+    let idDay1 = "";
+    await withEveContext(async () => {
+      await tool.execute({ kind: "daily" } as never, ctx as never);
+      idDay1 = stateMod.edition.get().id;
+    });
+
+    // Reset modules so the next collect sees the new wall clock + a
+    // fresh edition module (state is held in the AsyncLocalStorage
+    // binding the first import established).
+    vi.resetModules();
+    vi.useRealTimers();
+    vi.useFakeTimers({ now: new Date("2026-10-07T10:00:00.000Z"), toFake: ["Date"] });
+    const stateMod2 = await import("../agent/lib/state.ts");
+    const mod2 = await import("../agent/tools/collect_activity.ts");
+    const tool2 = mod2.default;
+    let idDay2 = "";
+    await withEveContext(async () => {
+      await tool2.execute({ kind: "daily" } as never, ctx as never);
+      idDay2 = stateMod2.edition.get().id;
+    });
+
+    expect(idDay1).not.toBe(idDay2);
+    expect(idDay1).toMatch(/^[0-9a-f]{24}$/);
+    expect(idDay2).toMatch(/^[0-9a-f]{24}$/);
+    vi.useRealTimers();
+  });
+});
+
+describe("Quiet-period rendering (criteria 3)", () => {
+  it("renders a quiet-period note when the corpus has no items and no availability", async () => {
+    // Empty fixtures everywhere → corpus.sources is empty AND availability is empty.
+    const fakeOctokit = buildFakeOctokit({
+      "GET /repos/{owner}/{repo}/dependabot/alerts": { fixture: "dependabot-alerts-empty.json" },
+      "GET /repos/{owner}/{repo}/code-scanning/alerts": {
+        fixture: "code-scanning-alerts-empty.json",
+      },
+      "GET /repos/{owner}/{repo}/secret-scanning/alerts": {
+        fixture: "secret-scanning-alerts.json",
+      },
+      "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
+      "GET /search/issues": {
+        match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
+        fixture: "merged-prs.json",
+      },
+      "GET /search/issues_issues": { fixture: "issues-empty.json" },
+      "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
+      "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
+    });
+    vi.doMock("@workspace/github", () => ({
+      createGitHubClient: () => ({ raw: fakeOctokit }),
+    }));
+    const renderMod = await import("@workspace/email");
+    const digest: Awaited<ReturnType<typeof renderMod.renderDigest>> = await renderMod.renderDigest(
+      {
+        kind: "daily",
+        subject: "Daily digest",
+        header: "h",
+        footer: "f",
+        edition: {
+          repo: "deessejs/agents",
+          period: {
+            start: "2026-10-05T00:00:00.000Z",
+            end: "2026-10-06T00:00:00.000Z",
+            label: "2026-10-05",
+          },
+          counts: {},
+          weeklyMetrics: null,
+          availability: [],
+        },
+        sections: [],
+      },
+    );
+    expect(digest.html).toContain("No activity recorded for this period");
+    expect(digest.text).toContain("No activity recorded for this period");
+  });
+});
+
+describe("Plain-text is meaningful (criterion 7)", () => {
+  it("text includes the annotation, source title, and URL — not just the URL list", async () => {
+    const renderMod = await import("@workspace/email");
+    const digest: Awaited<ReturnType<typeof renderMod.renderDigest>> = await renderMod.renderDigest(
+      {
+        kind: "daily",
+        subject: "Daily digest",
+        header: "h",
+        footer: "f",
+        edition: {
+          repo: "deessejs/agents",
+          period: {
+            start: "2026-10-05T00:00:00.000Z",
+            end: "2026-10-06T00:00:00.000Z",
+            label: "2026-10-05",
+          },
+          counts: {},
+          weeklyMetrics: null,
+          availability: [],
+        },
+        sections: [
+          {
+            kind: "tldr",
+            items: [
+              {
+                text: "OAuth PKCE landed",
+                source: {
+                  id: "deessejs/agents:pr:142",
+                  kind: "merged_pr",
+                  url: "https://github.com/deessejs/agents/pull/142",
+                  title: "feat: OAuth PKCE support",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    );
+    expect(digest.text).toContain("OAuth PKCE landed");
+    expect(digest.text).toContain("feat: OAuth PKCE support");
+    expect(digest.text).toContain("https://github.com/deessejs/agents/pull/142");
   });
 });

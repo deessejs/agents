@@ -11,7 +11,6 @@ import type { RequestParameters, Route } from "@octokit/types";
 
 import { createOctokit } from "./octokit.ts";
 import { paginateAll as paginateAllImpl } from "./pagination.ts";
-import { RateLimitResponseSchema } from "./schemas/rate-limit.ts";
 
 export interface GitHubClientConfig {
   /** Fine-grained PAT or GitHub App token. */
@@ -63,12 +62,15 @@ export interface GitHubClient {
  */
 async function getRateLimitImpl(octokit: Octokit): Promise<RateLimitInfo> {
   const response = await octokit.request("GET /rate_limit", {});
-  const data = RateLimitResponseSchema.parse(response.data);
+  const data = response.data as {
+    resources?: { core?: { remaining: number; reset: number; limit: number } };
+  };
+  const core = data.resources?.core;
+  if (!core) throw new Error("getRateLimit: malformed response (no resources.core)");
   return {
-    remaining: data.rate.remaining,
-    // `reset` is a unix timestamp (seconds); convert to a `Date`.
-    reset: new Date(data.rate.reset * 1000),
-    limit: data.rate.limit,
+    remaining: core.remaining,
+    reset: new Date(core.reset * 1000),
+    limit: core.limit,
   };
 }
 

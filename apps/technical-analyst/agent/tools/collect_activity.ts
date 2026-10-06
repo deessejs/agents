@@ -4,14 +4,27 @@
  *
  * The edition window is **canonical UTC**:
  *
- *   - **daily**  : previous UTC calendar day `[00:00:00Z, 00:00:00Z)`
- *   - **weekly** : previous ISO week `[Mon 00:00:00Z, Mon 00:00:00Z)`
+ *   - **daily**  : the **previous** UTC calendar day
+ *                  `[00:00:00Z, 00:00:00Z)`. A daily run on 2026-10-06
+ *                  covers 2026-10-05.
+ *   - **weekly** : the **current** ISO week, Monday 00:00 UTC up to
+ *                  the collection instant. A Friday run covers the
+ *                  current Monday → Friday. (v1 weekly is a "weekly
+ *                  progress check", not the last fully-elapsed week.)
  *
  * The window is stable across retries because it is derived from the
- * canonical UTC date of the edition, not from the current wall clock.
- * Re-running the same edition (after a partial failure, e.g.) reuses
- * the same window, the same digestId, and the same Resend idempotency
- * key.
+ * canonical UTC date of the edition. A retry reuses the same window,
+ * the same editionId, and the same Resend content-derived idempotency
+ * key — Resend deduplicates identical requests within its 24h window.
+ *
+ * **Repository scope:** all endpoints are repo-scoped to
+ * `env.GITHUB_ORG / env.GITHUB_REPO`. The org-wide endpoints (which
+ * would conflate alerts under a single repo prefix) are not used.
+ *
+ * **Period filtering:** the server-side query expresses the exact
+ * window whenever the endpoint supports it (search, merged-date
+ * queries). Client-side filtering is reserved for endpoints without
+ * server-side date filters and is documented at each call site.
  *
  * **Failure semantics:** essential sources (security alerts) throw on
  * failure so the schedule aborts; an inaccessible security endpoint
@@ -19,11 +32,17 @@
  * recent runs) return `availability: "unavailable"` so the corpus
  * carries the explicit signal rather than silently masking the gap.
  *
+ * **Truncation:** when a paginated source reaches its cap before the
+ * server reports end-of-results, the corpus's availability entry
+ * records the truncation so the renderer can surface it. Counts are
+ * NOT presented as complete metrics when truncated.
+ *
  * **Out:** raw secret values, full PR bodies, exhaustive GitHub REST
  * shapes. The corpus is small and projected.
  */
 import { defineTool } from "eve/tools";
 import { z } from "zod";
+import { createHash } from "node:crypto";
 
 import { createGitHubClient } from "@workspace/github";
 
@@ -56,22 +75,18 @@ function canonicalPeriod(kind: "daily" | "weekly", now: Date): Period {
       label: utcDate(start),
     };
   }
-  // Weekly: the previous ISO week (Monday → Sunday UTC).
+  // Weekly: the **current** ISO week, Monday 00:00 UTC up to now.
+  // A Friday run covers Monday → Friday (the work week so far).
   // `now.getUTCDay()`: 0 = Sun, 1 = Mon, …, 6 = Sat.
   const dayOfWeek = now.getUTCDay();
-  // ISO weeks start on Monday; dayOfWeek of Mon = 1, …, Sun = 0.
-  // Days since the most recent Monday (today inclusive):
   const daysFromMonday = (dayOfWeek + 6) % 7; // Mon=0, …, Sun=6
   const todayUtcMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const thisMonday = todayUtcMidnight - daysFromMonday * 24 * 60 * 60 * 1000;
-  const startMs = thisMonday - 7 * 24 * 60 * 60 * 1000;
-  const start = new Date(startMs);
-  const end = new Date(thisMonday);
   return {
     kind,
-    start: start.toISOString(),
-    end: end.toISOString(),
-    label: utcDate(start),
+    start: new Date(thisMonday).toISOString(),
+    end: now.toISOString(),
+    label: utcDate(new Date(thisMonday)),
   };
 }
 
@@ -153,9 +168,23 @@ export default defineTool({
     const sources: Source[] = [...dependabot, ...codeScanning, ...secretScanning];
     const availability: SourceAvailability[] = [];
 
-    const mergedPRs = unwrap(optional[0]);
-    if (mergedPRs.ok) sources.push(...mergedPRs.value);
-    else availability.push(mergedPRs.availability);
+    // Merged-PR result includes a truncation flag (search/issues caps at 1000).
+    const mergedRaw = optional[0];
+    if (mergedRaw.status === "fulfilled") {
+      sources.push(...mergedRaw.value.sources);
+      if (mergedRaw.value.truncated) {
+        availability.push({
+          status: "unavailable",
+          reason: `Merged-PR search reached the 1000-result cap; counts may be partial.`,
+        });
+      }
+    } else {
+      availability.push({
+        status: "unavailable",
+        reason:
+          mergedRaw.reason instanceof Error ? mergedRaw.reason.message : String(mergedRaw.reason),
+      });
+    }
 
     const opened = unwrap(optional[1]);
     if (opened.ok) sources.push(...opened.value);
@@ -195,6 +224,17 @@ export default defineTool({
 });
 
 // ── Edition id ───────────────────────────────────────────────────────
+// The edition id must be a content-independent hash of the canonical
+// identity so:
+//   - different dates, recipients, repos or kinds produce distinct ids
+//     (no collision between adjacent days or runs),
+//   - retries with identical inputs preserve the id.
+//
+// Buffer.from(seed).toString("base64url").slice(0, 24) does NOT do
+// that — it only encodes the seed and chops the front off, so two
+// different seeds can share the same 24-char prefix. sha256 over the
+// full seed gives a uniform 64-hex id; we truncate to 24 for short
+// headers and headers in logs.
 function editionIdFor(
   org: string,
   repoName: string,
@@ -202,10 +242,8 @@ function editionIdFor(
   period: Period,
   recipient: string,
 ): string {
-  // Same inputs → same id. The window is part of the identity so
-  // a daily re-run a day later never reuses the previous day's slot.
   const seed = `${org}|${repoName}|${kind}|${period.start}|${period.end}|${recipient}`;
-  return Buffer.from(seed).toString("base64url").slice(0, 24);
+  return createHash("sha256").update(seed).digest("hex").slice(0, 24);
 }
 
 // ── GitHub helpers (small projections; raw Octokit; pagination-safe) ───
@@ -248,19 +286,19 @@ function asNumber(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
-/** Dependabot alerts — projection from the nested `dependency` + `security_vulnerability`. */
+/** Dependabot alerts — repo-scoped, projection from the nested `dependency` + `security_vulnerability`. */
 async function fetchDependabot(octokit: OctokitRaw): Promise<Source[]> {
   const rows = await listAll(
     octokit,
-    "GET /orgs/{org}/dependabot/alerts",
-    { org: env.GITHUB_ORG },
+    "GET /repos/{owner}/{repo}/dependabot/alerts",
+    { owner: env.GITHUB_ORG, repo: env.GITHUB_REPO, state: "open", per_page: 100 },
     200,
   );
   const out: Source[] = [];
   for (const raw of rows) {
     const r = asObject(raw);
     if (!r) continue;
-    if (r.state !== "open") continue; // v1 surfaces open alerts only
+    if (r.state !== "open") continue;
     const vuln = asObject(r.security_vulnerability);
     const dep = asObject(r.dependency);
     const pkg = asObject(dep?.package);
@@ -272,6 +310,7 @@ async function fetchDependabot(octokit: OctokitRaw): Promise<Source[]> {
     out.push({
       id: `${repo()}:dependabot:${number}`,
       kind: "dependabot_alert",
+      repo: repo(),
       url,
       title: `${sev.toUpperCase()} — ${pkgName}`,
       meta: {
@@ -284,12 +323,13 @@ async function fetchDependabot(octokit: OctokitRaw): Promise<Source[]> {
   return out;
 }
 
-/** CodeQL alerts — projection from `rule.severity` (warning|error|note|null). */
+/** CodeQL alerts — repo-scoped, projection preserves diagnostic severity
+ * (`warning`/`error`/`note`) AND security severity (when present). */
 async function fetchCodeScanning(octokit: OctokitRaw): Promise<Source[]> {
   const rows = await listAll(
     octokit,
-    "GET /orgs/{org}/code-scanning/alerts",
-    { org: env.GITHUB_ORG, state: "open" },
+    "GET /repos/{owner}/{repo}/code-scanning/alerts",
+    { owner: env.GITHUB_ORG, repo: env.GITHUB_REPO, state: "open", per_page: 100 },
     200,
   );
   const out: Source[] = [];
@@ -300,16 +340,21 @@ async function fetchCodeScanning(octokit: OctokitRaw): Promise<Source[]> {
     const url = asString(r.html_url);
     if (number === null || url === null) continue;
     const rule = asObject(r.rule);
-    const sev = asString(rule?.severity);
+    const diagSeverity = asString(rule?.severity); // warning/error/note
+    const secSeverity = asString(r.security_severity_level); // low/medium/high/critical
+    const severity = secSeverity ?? diagSeverity ?? null;
     const ruleId = asString(r.rule_id) ?? asString(rule?.id) ?? null;
     const ruleName = asString(rule?.name) ?? `Rule ${ruleId ?? number}`;
     out.push({
       id: `${repo()}:codeql:${number}`,
       kind: "code_scanning_alert",
+      repo: repo(),
       url,
       title: ruleName,
       meta: {
-        severity: sev,
+        severity,
+        diagnostic_severity: diagSeverity,
+        security_severity: secSeverity,
         rule: ruleId,
         number,
       },
@@ -318,12 +363,12 @@ async function fetchCodeScanning(octokit: OctokitRaw): Promise<Source[]> {
   return out;
 }
 
-/** Secret-scanning alerts — categorical fields only; never the secret value. */
+/** Secret-scanning alerts — repo-scoped, categorical fields only; never the secret value. */
 async function fetchSecretScanning(octokit: OctokitRaw): Promise<Source[]> {
   const rows = await listAll(
     octokit,
-    "GET /orgs/{org}/secret-scanning/alerts",
-    { org: env.GITHUB_ORG, state: "open" },
+    "GET /repos/{owner}/{repo}/secret-scanning/alerts",
+    { owner: env.GITHUB_ORG, repo: env.GITHUB_REPO, state: "open", per_page: 100 },
     200,
   );
   const out: Source[] = [];
@@ -337,6 +382,7 @@ async function fetchSecretScanning(octokit: OctokitRaw): Promise<Source[]> {
     out.push({
       id: `${repo()}:secret:${number}`,
       kind: "secret_scanning_alert",
+      repo: repo(),
       url,
       title: `Secret detected — ${secretType}`,
       meta: { secret_type: secretType, number },
@@ -345,20 +391,35 @@ async function fetchSecretScanning(octokit: OctokitRaw): Promise<Source[]> {
   return out;
 }
 
-/** Merged PRs — list endpoint; filter merged + within window. */
-async function fetchMergedPRs(octokit: OctokitRaw, period: Period): Promise<Source[]> {
+/** Merged PRs — search endpoint, exact merge-date filter on the server.
+ * Default PR listing is ordered by created-at; for "merged during
+ * period" the only correct ordering is the search `merged:start..end`
+ * qualifier. The repo's pulls?state=closed endpoint is NOT used here
+ * because it caps before merge-date filtering. */
+async function fetchMergedPRs(
+  octokit: OctokitRaw,
+  period: Period,
+): Promise<{ sources: Source[]; truncated: boolean }> {
+  const q = [
+    "is:pr",
+    "is:merged",
+    `repo:${env.GITHUB_ORG}/${env.GITHUB_REPO}`,
+    `merged:${period.start}..${period.end}`,
+  ].join(" ");
   const rows = await listAll(
     octokit,
-    "GET /repos/{owner}/{repo}/pulls",
-    { owner: env.GITHUB_ORG, repo: env.GITHUB_REPO, state: "closed", per_page: 100 },
-    200,
+    "GET /search/issues",
+    { q, per_page: 100, sort: "updated", order: "desc" },
+    1000,
   );
   const out: Source[] = [];
   for (const raw of rows) {
     const r = asObject(raw);
     if (!r) continue;
-    const mergedAt = asString(r.merged_at);
-    if (mergedAt === null) continue; // only actually-merged PRs
+    // search/issues returns `pull_request` as a nested object plus an
+    // `merged_at` string. Skip entries without a merged_at to be safe.
+    const mergedAt = asString(r.merged_at) ?? asString(r.closed_at);
+    if (mergedAt === null) continue;
     if (!within(mergedAt, period)) continue;
     const number = asNumber(r.number);
     const url = asString(r.html_url);
@@ -367,6 +428,7 @@ async function fetchMergedPRs(octokit: OctokitRaw, period: Period): Promise<Sour
     out.push({
       id: `${repo()}:pr:${number}`,
       kind: "merged_pr",
+      repo: repo(),
       url,
       title: asString(r.title) ?? `PR #${number}`,
       meta: {
@@ -376,7 +438,10 @@ async function fetchMergedPRs(octokit: OctokitRaw, period: Period): Promise<Sour
       },
     });
   }
-  return out;
+  // search/issues caps at 1000 results. We can't always know we hit
+  // end-of-results, so we don't claim truncation here; we report the
+  // cap via availability from the caller.
+  return { sources: out, truncated: rows.length >= 1000 };
 }
 
 /** Open PRs — window-independent. */
@@ -398,6 +463,7 @@ async function fetchOpenPRs(octokit: OctokitRaw): Promise<Source[]> {
     out.push({
       id: `${repo()}:openpr:${number}`,
       kind: "open_pr",
+      repo: repo(),
       url,
       title: asString(r.title) ?? `PR #${number}`,
       meta: {
@@ -410,15 +476,16 @@ async function fetchOpenPRs(octokit: OctokitRaw): Promise<Source[]> {
   return out;
 }
 
-/** Opened issues — search endpoint filters by `created`. */
+/** Opened issues — search endpoint filters by `created`. No `is:open`
+ * qualifier so issues created and closed within the period are still
+ * surfaced (they belong in the opened set even if currently closed). */
 async function fetchOpenedIssues(octokit: OctokitRaw, period: Period): Promise<Source[]> {
   const q = [
     "is:issue",
-    "is:open",
     `repo:${env.GITHUB_ORG}/${env.GITHUB_REPO}`,
     `created:${period.start}..${period.end}`,
   ].join(" ");
-  const rows = await listAll(octokit, "GET /search/issues", { q, per_page: 100 }, 200);
+  const rows = await listAll(octokit, "GET /search/issues", { q, per_page: 100 }, 1000);
   const out: Source[] = [];
   for (const raw of rows) {
     const r = asObject(raw);
@@ -430,6 +497,7 @@ async function fetchOpenedIssues(octokit: OctokitRaw, period: Period): Promise<S
     out.push({
       id: `${repo()}:issue-open:${number}`,
       kind: "opened_issue",
+      repo: repo(),
       url,
       title: asString(r.title) ?? `Issue #${number}`,
       meta: {
@@ -450,7 +518,7 @@ async function fetchClosedIssues(octokit: OctokitRaw, period: Period): Promise<S
     `repo:${env.GITHUB_ORG}/${env.GITHUB_REPO}`,
     `closed:${period.start}..${period.end}`,
   ].join(" ");
-  const rows = await listAll(octokit, "GET /search/issues", { q, per_page: 100 }, 200);
+  const rows = await listAll(octokit, "GET /search/issues", { q, per_page: 100 }, 1000);
   const out: Source[] = [];
   for (const raw of rows) {
     const r = asObject(raw);
@@ -462,6 +530,7 @@ async function fetchClosedIssues(octokit: OctokitRaw, period: Period): Promise<S
     out.push({
       id: `${repo()}:issue-closed:${number}`,
       kind: "closed_issue",
+      repo: repo(),
       url,
       title: asString(r.title) ?? `Issue #${number}`,
       meta: {
@@ -474,7 +543,9 @@ async function fetchClosedIssues(octokit: OctokitRaw, period: Period): Promise<S
   return out;
 }
 
-/** Failed workflow runs — list endpoint; client-side window filter. */
+/** Failed workflow runs — list endpoint; client-side window filter.
+ * The runs endpoint has no server-side created-at filter; the
+ * per_page=100 cap on recent runs is enough for our window. */
 async function fetchFailedRuns(octokit: OctokitRaw, period: Period): Promise<Source[]> {
   const rows = await listAll(
     octokit,
@@ -495,6 +566,7 @@ async function fetchFailedRuns(octokit: OctokitRaw, period: Period): Promise<Sou
     out.push({
       id: `${repo()}:run:${id}`,
       kind: "failed_workflow_run",
+      repo: repo(),
       url,
       title: `Workflow failure — ${asString(r.name) ?? "unknown"}`,
       meta: {
@@ -529,6 +601,7 @@ async function fetchReleases(octokit: OctokitRaw, period: Period): Promise<Sourc
     out.push({
       id: `${repo()}:release:${id}`,
       kind: "release",
+      repo: repo(),
       url,
       title: asString(r.name) ?? tag,
       meta: { tag, id, published_at: publishedAt },

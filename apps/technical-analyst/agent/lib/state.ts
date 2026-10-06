@@ -1,20 +1,19 @@
 /**
  * Shared session state for the Technical Analyst.
  *
- * Two `defineState` handles:
+ * Two `defineState` handles — the minimum required so submit_digest
+ * can validate references without re-running collection:
  *
- *   - `edition`     — the canonical edition identity (kind, repo,
- *                     period, recipient). Read by submit_digest to
- *                     validate the report window + recipient.
- *   - `sourceCorpus` — the bounded source list + computed metrics
- *                      the model cites. Read by submit_digest to
- *                      validate every reference id.
- *   - `deliveryLog`  — finalized outgoing payload + Resend idempotency
- *                      key. Persisted before send so a retry after
- *                      Resend acceptance reuses the same payload +
- *                      key. Read at session start.
+ *   - `edition`       — the canonical edition identity (kind, repo,
+ *                       period, recipient, collectedAt). Read by
+ *                       submit_digest to validate the report window.
+ *   - `sourceCorpus`  — the source list the model cites. Read by
+ *                       submit_digest to validate every reference id.
  *
- * Cross-session persistence lives in Vercel KV (see `kv-edition.ts`).
+ * No cross-session persistence: a v1 digest run does not need exactly-
+ * once delivery. Retries of the same outgoing payload reuse Resend's
+ * content-derived idempotency key (24h window); independently regen
+ * runs may occasionally send a duplicate, which is acceptable.
  */
 import { defineState } from "eve/context";
 
@@ -32,6 +31,7 @@ export type SourceKind =
 export interface Source {
   readonly id: string;
   readonly kind: SourceKind;
+  readonly repo: string;
   readonly url: string;
   readonly title: string;
   readonly meta?: Readonly<Record<string, string | number | boolean | null>>;
@@ -92,17 +92,6 @@ export interface SourceCorpus {
   readonly availability: ReadonlyArray<SourceAvailability>;
 }
 
-export interface DeliveryRecord {
-  readonly editionId: string;
-  readonly subject: string;
-  readonly html: string;
-  readonly text: string;
-  readonly idempotencyKey: string;
-  readonly status: "delivered";
-  readonly messageId: string;
-  readonly sentAt: string;
-}
-
 const INITIAL_EDITION: Edition = {
   id: "",
   kind: "daily",
@@ -134,8 +123,3 @@ export const sourceCorpus = defineState<SourceCorpus>("technical-analyst.source-
   weeklyMetrics: null,
   availability: [],
 }));
-
-export const deliveryLog = defineState<DeliveryRecord | null>(
-  "technical-analyst.delivery-log",
-  () => null,
-);

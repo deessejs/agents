@@ -115,6 +115,7 @@ export const baseOxlintConfig = {
     "**/build/**",
     "**/out/**",
     "**/coverage/**",
+    "**/.eve/**",
     "**/*.generated.ts",
     "**/*.generated.js",
   ],

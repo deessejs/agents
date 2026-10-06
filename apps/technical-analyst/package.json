@@ -15,7 +15,6 @@
   "dependencies": {
     "@ai-sdk/minimax": "catalog:",
     "@ai-sdk/provider": "catalog:",
-    "@vercel/kv": "catalog:",
     "@workspace/email": "workspace:*",
     "@workspace/env": "workspace:*",
     "@workspace/github": "workspace:*",

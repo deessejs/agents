@@ -48,15 +48,6 @@ catalog:
   "@ai-sdk/provider": 4.0.21
   "@ai-sdk/provider-utils": 5.0.53
 
-  # Observability (pinned — otel SDK majors ship breaking changes;
-  # @opentelemetry/* stays caret because their published majors are reliable)
-  pino: ^9.5.0
-  "@opentelemetry/api": ^1.9.0
-  "@opentelemetry/sdk-node": ^0.222.0
-  "@opentelemetry/exporter-trace-otlp-http": ^0.222.0
-  "@opentelemetry/resources": ^2.0.0
-  "@opentelemetry/semantic-conventions": ^1.27.0
-
   # GitHub API (pinned — octokit majors ship breaking changes;
   # cross-plugin compatibility is verified only at exact ranges)
   "@octokit/core": 7.0.8
@@ -64,11 +55,6 @@ catalog:
   "@octokit/plugin-paginate-rest": 16.0.0
   "@octokit/plugin-retry": 8.1.1
   "@octokit/types": ^18.0.0
-
-  # Vercel KV (digest edition identity + delivery status).
-  # We hold at 3.0.0 because the runtime still uses the legacy SDK
-  # surface. v2 plan: migrate to @upstash/redis.
-  "@vercel/kv": ^3.0.0
 
   # Email (Phase 2 — @workspace/email).
   # resend: caret (Resend majors are rare and the SDK is small + stable).

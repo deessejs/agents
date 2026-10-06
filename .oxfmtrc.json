@@ -9,6 +9,7 @@
   "bracketSpacing": true,
   "arrowParens": "always",
   "endOfLine": "lf",
+  "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.turbo/**", "**/tmp/**", "**/.eve/**"],
   "overrides": [
     {
       "files": ["*.md"],
