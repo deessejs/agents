@@ -17,4 +17,6 @@
 export { createEmailClient } from "./create-email-client.ts";
 export { buildHeaders } from "./headers.ts";
 export { deriveIdempotencyKey } from "./idempotency.ts";
+export { renderDigest } from "./render-digest.tsx";
+export type { RenderedDigest, RenderDigestInput, ResolvedSection } from "./render-digest.tsx";
 export type { CreateEmailOptions, SendOptions, SendResult, SendTag, EmailClient } from "./types.ts";

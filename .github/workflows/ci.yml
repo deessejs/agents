@@ -29,7 +29,7 @@ jobs:
   build:
     name: Lint, format, typecheck, test, build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -63,5 +63,15 @@ jobs:
       - name: Test
         run: pnpm run test
 
-      - name: Build
+      - name: Eve discovery
+        working-directory: apps/technical-analyst
+        run: ./node_modules/.bin/eve info
+
+      - name: Eve build
+        working-directory: apps/technical-analyst
+        run: ./node_modules/.bin/eve build
+
+      - name: Build (turbo)
         run: pnpm run build
+        # turbo dispatches to each workspace's build; the agent app's
+        # build runs `eve build`, the shared packages run `tsc --noEmit`.

@@ -1,131 +1,22 @@
 [
   {
-    "id": 1,
     "number": 142,
     "title": "feat: OAuth PKCE support",
-    "body": "PKCE flow \u00e2\u20ac\u201d long body that should never reach the model.",
     "state": "closed",
-    "draft": false,
-    "merged": true,
-    "mergeable": true,
-    "mergeable_state": "clean",
-    "user": {
-      "login": "martin",
-      "id": 1,
-      "html_url": "https://github.com/martin",
-      "type": "User",
-      "avatar_url": "https://avatars.githubusercontent.com/u/0"
-    },
-    "head": {
-      "label": "martin:feat/pkce",
-      "ref": "feat/pkce",
-      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "user": null
-    },
-    "base": {
-      "label": "deessejs:main",
-      "ref": "main",
-      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "user": null
-    },
-    "created_at": "2026-10-04T08:00:00Z",
-    "updated_at": "2026-10-05T11:30:00Z",
-    "closed_at": "2026-10-05T11:30:00Z",
     "merged_at": "2026-10-05T11:30:00Z",
-    "merge_commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "additions": 142,
-    "deletions": 58,
-    "changed_files": 7,
-    "comments": 4,
-    "review_comments": 6,
-    "commits": 3,
     "html_url": "https://github.com/deessejs/agents/pull/142",
-    "labels": []
+    "user": { "login": "martin", "id": 1, "html_url": "https://github.com/martin", "type": "User" },
+    "created_at": "2026-10-04T08:00:00Z",
+    "updated_at": "2026-10-05T11:30:00Z"
   },
   {
-    "id": 2,
     "number": 143,
     "title": "fix: race in digest refresh",
-    "body": "Fix race.",
     "state": "closed",
-    "draft": false,
-    "merged": true,
-    "mergeable": true,
-    "mergeable_state": "clean",
-    "user": {
-      "login": "alice",
-      "id": 2,
-      "html_url": "https://github.com/alice",
-      "type": "User",
-      "avatar_url": "https://avatars.githubusercontent.com/u/0"
-    },
-    "head": {
-      "label": "alice:fix/race",
-      "ref": "fix/race",
-      "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "user": null
-    },
-    "base": {
-      "label": "deessejs:main",
-      "ref": "main",
-      "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "user": null
-    },
-    "created_at": "2026-10-04T13:00:00Z",
-    "updated_at": "2026-10-05T09:10:00Z",
-    "closed_at": "2026-10-05T09:10:00Z",
     "merged_at": "2026-10-05T09:10:00Z",
-    "merge_commit_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "additions": 22,
-    "deletions": 18,
-    "changed_files": 3,
-    "comments": 1,
-    "review_comments": 0,
-    "commits": 1,
     "html_url": "https://github.com/deessejs/agents/pull/143",
-    "labels": []
-  },
-  {
-    "id": 3,
-    "number": 144,
-    "title": "chore: bump pino to v9",
-    "body": "Bump pino.",
-    "state": "closed",
-    "draft": false,
-    "merged": true,
-    "mergeable": true,
-    "mergeable_state": "clean",
-    "user": {
-      "login": "renovate",
-      "id": 3,
-      "html_url": "https://github.com/renovate",
-      "type": "User",
-      "avatar_url": "https://avatars.githubusercontent.com/u/0"
-    },
-    "head": {
-      "label": "renovate:pino",
-      "ref": "renovate/pino",
-      "sha": "cccccccccccccccccccccccccccccccccccccccc",
-      "user": null
-    },
-    "base": {
-      "label": "deessejs:main",
-      "ref": "main",
-      "sha": "cccccccccccccccccccccccccccccccccccccccc",
-      "user": null
-    },
-    "created_at": "2026-10-04T19:00:00Z",
-    "updated_at": "2026-10-05T07:00:00Z",
-    "closed_at": "2026-10-05T07:00:00Z",
-    "merged_at": "2026-10-05T07:00:00Z",
-    "merge_commit_sha": "cccccccccccccccccccccccccccccccccccccccc",
-    "additions": 2,
-    "deletions": 2,
-    "changed_files": 1,
-    "comments": 0,
-    "review_comments": 0,
-    "commits": 1,
-    "html_url": "https://github.com/deessejs/agents/pull/144",
-    "labels": []
+    "user": { "login": "alice", "id": 2, "html_url": "https://github.com/alice", "type": "User" },
+    "created_at": "2026-10-04T13:00:00Z",
+    "updated_at": "2026-10-05T09:10:00Z"
   }
 ]

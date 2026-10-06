@@ -6,6 +6,11 @@
  * fields locked 2026-10-06 per the Phase 2 plan.
  *
  * Used by the agent's tools and schedules.
+ *
+ * **Passthrough:** the final object is `.passthrough()` (not `.strict()`)
+ * so unrelated deployment variables (`VERCEL_*`, `NODE_ENV`, `PORT`,
+ * etc.) are ignored instead of rejected. The agent declares only the
+ * keys it needs; runtime platforms add their own.
  */
 import { z } from "zod";
 import { createEnv } from "@workspace/env";
@@ -43,16 +48,28 @@ const technicalAnalystSchema = baseSchema
     UNSUBSCRIBE_MAILTO: z.email(),
 
     // ── LLM provider ───────────────────────────────────────────────────
-    /** Model id; defaults to MiniMax-m3 via @ai-sdk/minimax. */
+    /** AI SDK provider id (e.g. `"minimax"`). Used by `defineAgent`. */
+    LLM_PROVIDER: z.enum(["minimax"]).default("minimax"),
+    /** Model id passed to the provider (e.g. `"minimax-m3"`). */
     LLM_MODEL_ID: z.string().default("minimax-m3"),
+    /**
+     * Direct MiniMax / provider API key. Required when `LLM_PROVIDER`
+     * is set; the agent reads it from this key rather than from any
+     * SDK wrapper so deployments can swap providers without code.
+     */
+    MINIMAX_API_KEY: z.string().min(1),
 
-    // ── Optional kill-switch ───────────────────────────────────────────
+    // ── Vercel KV (used for stable edition identity + run status) ──────
+    KV_REST_API_URL: z.string().url(),
+    KV_REST_API_TOKEN: z.string().min(1),
+
+    // ── Optional kill-switch (checked BEFORE collection starts) ───────
     AGENTS_PAUSED: z
       .enum(["true", "false"])
       .default("false")
       .transform((v) => v === "true"),
   })
-  .strict();
+  .passthrough();
 
 export const env = createEnv(technicalAnalystSchema);
 export type Env = typeof env;

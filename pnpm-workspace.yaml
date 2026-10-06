@@ -4,7 +4,9 @@ packages:
   - "tools/*"
 
 allowBuilds:
+  '@mongodb-js/zstd': true
   esbuild: true
+  node-liblzma: true
   protobufjs: true
 
 # ----------------------------------------------------------------------------
@@ -63,6 +65,11 @@ catalog:
   "@octokit/plugin-retry": 8.1.1
   "@octokit/types": ^18.0.0
 
+  # Vercel KV (digest edition identity + delivery status).
+  # We hold at 3.0.0 because the runtime still uses the legacy SDK
+  # surface. v2 plan: migrate to @upstash/redis.
+  "@vercel/kv": ^3.0.0
+
   # Email (Phase 2 — @workspace/email).
   # resend: caret (Resend majors are rare and the SDK is small + stable).
   # react-email: caret (the v6 line unifies @react-email/components +
@@ -83,6 +90,11 @@ catalog:
   # Upgrade policy: every minor bump requires re-reading the runtime
   # doc snippets against the new eve API (the framework is still 0.x).
   eve: ^0.71.2
+
+  # Eve's default local sandbox provider (peer of eve). Required for
+  # `eve dev` / `eve build` / `eve start` on a developer workstation or
+  # in CI. Pinned exactly to match eve's expectation.
+  just-bash: 3.1.0
 
 minimumReleaseAgeExclude:
   - eve@0.71.2
