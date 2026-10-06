@@ -277,7 +277,9 @@ export default defineTool({
       windowStart: since,
       windowEnd: until,
       sourceCount: sources.length,
-      sources: sources.slice(0, 50).map((s) => ({ id: s.id, kind: s.kind, url: s.url, title: s.title })),
+      sources: sources
+        .slice(0, 50)
+        .map((s) => ({ id: s.id, kind: s.kind, url: s.url, title: s.title })),
     };
   },
 });

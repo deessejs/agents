@@ -29,9 +29,7 @@ export interface BuildHeadersInput extends CreateEmailOptions {
  */
 function assertNoCrlf(name: string, value: string): void {
   if (/[\r\n]/.test(value)) {
-    throw new Error(
-      `buildHeaders: ${name} contains CR/LF — refusing to inject header`,
-    );
+    throw new Error(`buildHeaders: ${name} contains CR/LF — refusing to inject header`);
   }
 }
 

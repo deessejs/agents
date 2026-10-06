@@ -48,12 +48,9 @@ export interface SourceCorpus {
   readonly sources: ReadonlyArray<SourceEntry>;
 }
 
-export const sourceCorpus = defineState<SourceCorpus>(
-  "technical-analyst.source-corpus",
-  () => ({
-    kind: "daily",
-    windowStart: "",
-    windowEnd: "",
-    sources: [],
-  }),
-);
+export const sourceCorpus = defineState<SourceCorpus>("technical-analyst.source-corpus", () => ({
+  kind: "daily",
+  windowStart: "",
+  windowEnd: "",
+  sources: [],
+}));

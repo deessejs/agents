@@ -232,10 +232,7 @@ const SubmitInputSchema = z.discriminatedUnion("kind", [
 
 /** Derive the digestId from the canonical window. */
 function digestIdFor(org: string, kind: "daily" | "weekly", start: string, end: string): string {
-  return createHash("sha256")
-    .update([org, kind, start, end].join("|"))
-    .digest("hex")
-    .slice(0, 8);
+  return createHash("sha256").update([org, kind, start, end].join("|")).digest("hex").slice(0, 8);
 }
 
 /**
@@ -328,16 +325,12 @@ export default defineTool({
   },
   async execute({ kind, report, preview }) {
     if (env.AGENTS_PAUSED) {
-      throw new Error(
-        "Agent is paused (env.AGENTS_PAUSED=true). The delivery will not be sent.",
-      );
+      throw new Error("Agent is paused (env.AGENTS_PAUSED=true). The delivery will not be sent.");
     }
 
     const corpus = sourceCorpus.get();
     if (corpus.windowEnd === "") {
-      throw new Error(
-        "submit_digest: corpus is empty — call collect_activity first",
-      );
+      throw new Error("submit_digest: corpus is empty — call collect_activity first");
     }
     if (corpus.kind !== kind) {
       throw new Error(
@@ -346,9 +339,10 @@ export default defineTool({
       );
     }
 
-    const refMap = (kind === "daily"
-      ? DAILY_REF_KINDS
-      : WEEKLY_REF_KINDS) as Record<string, ReadonlyArray<string>>;
+    const refMap = (kind === "daily" ? DAILY_REF_KINDS : WEEKLY_REF_KINDS) as Record<
+      string,
+      ReadonlyArray<string>
+    >;
     const resolved = resolveReferences(report, corpus.sources, refMap);
 
     const id = digestIdFor(env.GITHUB_ORG, kind, corpus.windowStart, corpus.windowEnd);
@@ -381,27 +375,22 @@ export default defineTool({
       unsubscribeMailto: env.UNSUBSCRIBE_MAILTO,
     });
 
-    let result: SendResult;
-    try {
-      result = await email.send({
-        to: env.DIGEST_RECIPIENT,
-        subject,
-        html,
-        text,
-        digestId: id,
-        tags: [
-          { name: "agent", value: "technical-analyst" },
-          { name: "kind", value: kind },
-          { name: "digest_id", value: id },
-        ],
-      });
-    } catch (err) {
-      // Resend rejected the send — the application-side state did
-      // not change, so the next attempt is a clean retry. The
-      // delivery log is NOT written; the schedule's failure
-      // detector treats this run as failed.
-      throw err;
-    }
+    // If `email.send` throws, the application-side state did not
+    // change — the next attempt is a clean retry. The delivery log
+    // is NOT written; the schedule's failure detector treats this
+    // run as failed. The throw propagates to the schedule end.
+    const result: SendResult = await email.send({
+      to: env.DIGEST_RECIPIENT,
+      subject,
+      html,
+      text,
+      digestId: id,
+      tags: [
+        { name: "agent", value: "technical-analyst" },
+        { name: "kind", value: kind },
+        { name: "digest_id", value: id },
+      ],
+    });
 
     // Successful send: persist the delivery record so the schedule's
     // success detector can confirm. An interrupted retry that already
