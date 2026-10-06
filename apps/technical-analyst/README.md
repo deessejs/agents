@@ -103,9 +103,10 @@ status=completed`); client-side `[start, end)` half-open window filter is
   edition that was previously delivered.
 - Delivery: `createEmailClient.send(...)` (Resend, `Precedence: bulk` +
   `X-Digest-Id` header, content-derived idempotency key, 24h dedup).
-- `endsTurn: true` — invoking submit_digest ends the schedule turn. A
-  schedule run that ends without an `endsTurn` tool call is reported as
-  unsuccessful by Eve.
+- `endsTurn: true` — submitting the digest ends the model turn. A turn
+  that ends without invoking an `endsTurn` tool leaves the schedule
+  run without an outbound email; the throw from a tool that fails propagates
+  to the schedule trace.
 
 ## Edition identity
 
@@ -126,13 +127,14 @@ is expected to call `collect_activity` then `submit_digest`. If the corpus
 is empty AND no fetcher reported unavailable, the report is submitted
 with zero items; the renderer shows a quiet-period note. Do NOT invent
 references. If the model finishes the turn without calling `submit_digest`,
-Eve marks the schedule run unsuccessful.
+no email is sent — the schedule run produces no delivery, but a throw
+from a tool that fails does surface in the schedule trace.
 
 ## Quality gates
 
 - `pnpm run check` — oxlint + oxfmt across the repo
 - `pnpm run typecheck` — tsc across the repo
-- `pnpm run test` — vitest suites (5 + 13 + 19 tests)
+- `pnpm run test` — vitest suites (5 github + 13 email + 27 agent)
 - `pnpm run build` — turbo; for the agent app this runs `eve build`
 
 CI invokes `eve info` (no env needed) and `pnpm run build` with the env keys
@@ -140,8 +142,8 @@ listed in `turbo.json > build.env`. No production credentials touch CI.
 
 ## Acceptance tests
 
-19 tests in `tests/acceptance.test.ts` exercise the real tool bodies with
-mocked GitHub + Resend:
+27 tests in `tests/acceptance.test.ts` exercise the real tool bodies with
+mocked GitHub + Resend. 5 + 13 + 27 across all workspaces.
 
 | #   | Coverage                                                               |
 | --- | ---------------------------------------------------------------------- |
@@ -158,12 +160,17 @@ mocked GitHub + Resend:
 | 11  | Distinct edition ids across two consecutive daily runs                 |
 | 12  | Quiet-period rendering when the corpus is empty + no availability      |
 | 13  | Plain-text output includes annotation, source title, and URL           |
-| 14  | `submit_digest` sets `endsTurn: true` (schedule run delivery)          |
-| 15  | Runtime dispatch: collect → submit_digest delivers end-to-end          |
-| 16  | Partial collection still delivers with availability surfaced           |
-| 17  | Model finishes without `submit_digest` → no delivery, run unsuccessful |
-| 18  | Hidden — verified via dispatch test                                    |
-| 19  | Hidden — verified via dispatch test                                    |
+| 14  | Nested `rule.security_severity_level` projects into source meta        |
+| 15  | Opened-issue half-open boundary: record at `period.end` is excluded    |
+| 16  | Closed-issue half-open boundary: record at `period.end` is excluded    |
+| 17  | Workflow-runs endpoint receives `status=failure` + full ISO `created`  |
+| 18  | 100-result cap on workflow runs surfaces truncation availability       |
+| 19  | `submit_digest` sets `endsTurn: true`; `collect_activity` does not     |
+| 20  | Runtime dispatch: collect → submit_digest delivers end-to-end          |
+| 21  | Loop ends without submission when the model finishes without submit    |
+| 22  | Errors propagate when Resend rejects the send                          |
+| 23  | Validation errors from submit_digest propagate                         |
+| 24  | Partial collection still delivers with availability in HTML + text     |
 
 ## What this agent does NOT do (v1)
 

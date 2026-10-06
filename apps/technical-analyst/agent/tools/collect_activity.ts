@@ -347,19 +347,28 @@ async function listAll(
   route: string,
   params: Record<string, unknown>,
   max: number,
+  /** Some endpoints (e.g. /actions/runs) wrap the array under a named
+   * key in the response body. Provide it so we can extract the rows
+   * the real paginate plugin would yield. */
+  arrayKey?: string,
 ): Promise<{ rows: unknown[]; truncated: boolean }> {
   // The paginate plugin attaches a `paginate` field at runtime that
   // the base Octokit type does not model. We cast through unknown to
   // call `paginate.iterator(...)` without losing the underlying
   // type-safety of the raw client.
   type WithPaginate = {
-    paginate: { iterator: (...args: unknown[]) => AsyncIterable<{ data: unknown[] }> };
+    paginate: { iterator: (...args: unknown[]) => AsyncIterable<{ data: unknown }> };
   };
   const paginated = octokit as unknown as WithPaginate;
   const iter = paginated.paginate.iterator(route, params);
   const out: unknown[] = [];
   for await (const page of iter) {
-    for (const item of page.data) {
+    const data = page.data;
+    const items = (arrayKey === undefined ? data : asObject(data)?.[arrayKey]) as
+      | unknown[]
+      | undefined;
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
       out.push(item);
       if (out.length >= max) {
         // We can't know if there's another page after we hit the cap.
@@ -669,18 +678,20 @@ async function fetchClosedIssues(octokit: OctokitRaw, period: Period): Promise<C
   return { sources: out, truncated };
 }
 
-/** Failed workflow runs — list endpoint with server-side period filter.
+/** Failed workflow runs — list endpoint with server-side narrowing.
  *
- * `/repos/{owner}/{repo}/actions/runs` supports a `created` qualifier
- * (`YYYY-MM-DD..YYYY-MM-DD`) and a `status` filter. We use both:
- * `created:start..end` aligns with the edition window; `status=completed`
- * keeps the run set to finished runs (a failure conclusion only exists
- * for completed runs). Client-side filter keeps only `failure`
- * conclusions. The first page is capped at 100; if we hit that cap we
- * surface it as truncated so counts are not presented as exhaustive. */
+ * `/repos/{owner}/{repo}/actions/runs` accepts a `status` filter and a
+ * `created` qualifier with full ISO timestamps. We pass:
+ *   - `status=failure` so the server narrows on runs whose conclusion is
+ *     already known to be failure (cuts out success/cancelled/in-progress
+ *     before they can spend the cap),
+ *   - `created:period.start..period.end` so the run window aligns with
+ *     the edition window in full precision.
+ *
+ * The half-open client-side `within()` check stays in case the server
+ * accepts the boundary inclusively. When the cap (100) is reached we
+ * report truncated availability so counts are not presented as exhaustive. */
 async function fetchFailedRuns(octokit: OctokitRaw, period: Period): Promise<CappedFetch> {
-  const startDate = period.start.slice(0, 10);
-  const endDate = period.end.slice(0, 10);
   const { rows, truncated } = await listAll(
     octokit,
     "GET /repos/{owner}/{repo}/actions/runs",
@@ -688,10 +699,11 @@ async function fetchFailedRuns(octokit: OctokitRaw, period: Period): Promise<Cap
       owner: env.GITHUB_ORG,
       repo: env.GITHUB_REPO,
       per_page: 100,
-      status: "completed",
-      created: `${startDate}..${endDate}`,
+      status: "failure",
+      created: `${period.start}..${period.end}`,
     },
     100,
+    "workflow_runs",
   );
   const out: Source[] = [];
   for (const raw of rows) {

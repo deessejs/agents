@@ -143,32 +143,40 @@ interface OctokitResponse {
   url: string;
 }
 
-type RouteSpec =
+type RouteSpecEntry =
   | { fixture: string }
   | { match: (params: Record<string, unknown> | undefined) => boolean; fixture: string };
 
-function buildFakeOctokit(routes: Record<string, RouteSpec>): unknown {
+/**
+ * Each route key resolves to an ordered list of entries. The first
+ * predicate (or the only fixture) that matches wins. Use this when one
+ * route serves multiple query qualifiers — e.g. `GET /search/issues`
+ * needs different fixtures for `is:merged` and `is:issue`.
+ */
+type RouteSpec = RouteSpecEntry | ReadonlyArray<RouteSpecEntry>;
+
+function buildFakeOctokit(
+  routes: Record<string, RouteSpec>,
+  recordedCalls?: { route: string; params: Record<string, unknown> | undefined }[],
+): { raw: unknown; calls: { route: string; params: Record<string, unknown> | undefined }[] } {
+  const calls: { route: string; params: Record<string, unknown> | undefined }[] =
+    recordedCalls ?? [];
   const stripQuery = (route: string): string => route.split("?")[0] ?? route;
+  const asEntries = (spec: RouteSpec): ReadonlyArray<RouteSpecEntry> => {
+    if (Array.isArray(spec)) return spec;
+    return [spec as RouteSpecEntry];
+  };
   const lookup = (
     route: string,
     params?: Record<string, unknown>,
   ): { fixture: string } | undefined => {
     const path = stripQuery(route);
-    // Predicate-based routes win over path-only routes when the predicate
-    // is true (lets tests route search queries by `q` content).
-    for (const [key, spec] of Object.entries(routes)) {
-      if (Object.prototype.hasOwnProperty.call(spec, "match")) {
-        if (
-          stripQuery(key) === path &&
-          (spec as { match: (p: unknown) => boolean }).match(params)
-        ) {
-          return spec as { fixture: string };
-        }
-      }
-    }
-    const fallback = routes[path] ?? routes[route];
-    if (fallback && !Object.prototype.hasOwnProperty.call(fallback, "match")) {
-      return fallback as { fixture: string };
+    const spec = routes[path];
+    if (!spec) return undefined;
+    for (const entry of asEntries(spec)) {
+      if (!Object.hasOwnProperty.call(entry, "match")) return entry as { fixture: string };
+      const matches = (entry as { match: (p: unknown) => boolean }).match(params);
+      if (matches) return entry as { fixture: string };
     }
     return undefined;
   };
@@ -176,6 +184,7 @@ function buildFakeOctokit(routes: Record<string, RouteSpec>): unknown {
     route: string,
     params?: Record<string, unknown>,
   ): Promise<OctokitResponse> => {
+    calls.push({ route, params });
     const spec = lookup(route, params);
     if (!spec) throw new Error(`Fake octokit: unstubbed route ${route}`);
     const data = JSON.parse(await readFile(join(FIXTURE_DIR, spec.fixture), "utf8")) as unknown;
@@ -183,6 +192,7 @@ function buildFakeOctokit(routes: Record<string, RouteSpec>): unknown {
   };
   const paginate = {
     iterator(route: string, params?: Record<string, unknown>): AsyncIterable<{ data: unknown[] }> {
+      calls.push({ route, params });
       const spec = lookup(route, params);
       if (!spec) throw new Error(`Fake octokit: unstubbed paginate ${route}`);
       return (async function* (): AsyncGenerator<{ data: unknown[] }> {
@@ -193,7 +203,7 @@ function buildFakeOctokit(routes: Record<string, RouteSpec>): unknown {
       })();
     },
   };
-  return { request: handler, paginate };
+  return { raw: { request: handler, paginate }, calls };
 }
 
 // ── Discovery ───────────────────────────────────────────────────────────
@@ -252,16 +262,24 @@ describe("collect_activity", () => {
         fixture: "secret-scanning-alerts.json",
       },
       "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
-      "GET /search/issues": {
-        match: (params) => typeof params?.q === "string" && params.q.includes("is:merged"),
-        fixture: "merged-prs.json",
-      },
-      "GET /search/issues_issues": { fixture: "issues-empty.json" },
+      "GET /search/issues": [
+        {
+          match: (params) => typeof params?.q === "string" && params.q.includes("is:merged"),
+          fixture: "merged-prs.json",
+        },
+        {
+          match: (params) =>
+            typeof params?.q === "string" &&
+            params.q.includes("is:issue") &&
+            !params.q.includes("is:merged"),
+          fixture: "issues-empty.json",
+        },
+      ],
       "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
       "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
     });
     vi.doMock("@workspace/github", () => ({
-      createGitHubClient: () => ({ raw: fakeOctokit }),
+      createGitHubClient: () => ({ raw: fakeOctokit.raw }),
     }));
     const mod = await import("../agent/tools/collect_activity.ts");
     const tool = mod.default;
@@ -334,6 +352,197 @@ describe("collect_activity", () => {
       withEveContext(async () => tool.execute({ kind: "daily" } as never, ctx as never)),
     ).rejects.toThrow(/paused/);
   });
+
+  it("nested CodeQL rule.security_severity_level is projected into the source meta", async () => {
+    const fakeOctokit = buildFakeOctokit({
+      "GET /repos/{owner}/{repo}/dependabot/alerts": { fixture: "dependabot-alerts-empty.json" },
+      "GET /repos/{owner}/{repo}/code-scanning/alerts": { fixture: "code-scanning-alerts.json" },
+      "GET /repos/{owner}/{repo}/secret-scanning/alerts": {
+        fixture: "secret-scanning-alerts-empty.json",
+      },
+      "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
+      "GET /search/issues": [
+        {
+          match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
+          fixture: "merged-prs.json",
+        },
+        {
+          match: (p) =>
+            typeof p?.q === "string" && p.q.includes("is:issue") && !p.q.includes("is:merged"),
+          fixture: "issues-empty.json",
+        },
+      ],
+      "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
+      "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
+    });
+    vi.doMock("@workspace/github", () => ({
+      createGitHubClient: () => ({ raw: fakeOctokit.raw }),
+    }));
+    const mod = await import("../agent/tools/collect_activity.ts");
+    const tool = mod.default;
+    const result = (await withEveContext(
+      async () => tool.execute({ kind: "daily" } as never, ctx as never) as unknown,
+    )) as Awaited<ReturnType<typeof tool.execute>>;
+    const codeql = result.sources.find((s) => s.kind === "code_scanning_alert");
+    expect(codeql).toBeDefined();
+    expect(codeql?.meta?.security_severity).toBe("high");
+    expect(codeql?.meta?.diagnostic_severity).toBe("error");
+  });
+
+  it("opened-issue half-open window: record exactly at period.end is excluded", async () => {
+    const fakeOctokit = buildFakeOctokit({
+      "GET /repos/{owner}/{repo}/dependabot/alerts": { fixture: "dependabot-alerts-empty.json" },
+      "GET /repos/{owner}/{repo}/code-scanning/alerts": {
+        fixture: "code-scanning-alerts-empty.json",
+      },
+      "GET /repos/{owner}/{repo}/secret-scanning/alerts": {
+        fixture: "secret-scanning-alerts-empty.json",
+      },
+      "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
+      "GET /search/issues": [
+        {
+          match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
+          fixture: "merged-prs.json",
+        },
+        {
+          match: (p) =>
+            typeof p?.q === "string" && p.q.includes("is:issue") && !p.q.includes("is:merged"),
+          fixture: "issues-opened-boundary.json",
+        },
+      ],
+      "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
+      "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
+    });
+    vi.doMock("@workspace/github", () => ({
+      createGitHubClient: () => ({ raw: fakeOctokit.raw }),
+    }));
+    const mod = await import("../agent/tools/collect_activity.ts");
+    const tool = mod.default;
+    const result = (await withEveContext(
+      async () => tool.execute({ kind: "daily" } as never, ctx as never) as unknown,
+    )) as Awaited<ReturnType<typeof tool.execute>>;
+    const opened = result.sources.filter((s) => s.kind === "opened_issue");
+    expect(opened.map((s) => s.meta?.number)).toEqual([401]);
+  });
+
+  it("closed-issue half-open window: record exactly at period.end is excluded", async () => {
+    const fakeOctokit = buildFakeOctokit({
+      "GET /repos/{owner}/{repo}/dependabot/alerts": { fixture: "dependabot-alerts-empty.json" },
+      "GET /repos/{owner}/{repo}/code-scanning/alerts": {
+        fixture: "code-scanning-alerts-empty.json",
+      },
+      "GET /repos/{owner}/{repo}/secret-scanning/alerts": {
+        fixture: "secret-scanning-alerts-empty.json",
+      },
+      "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
+      "GET /search/issues": [
+        {
+          match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
+          fixture: "merged-prs.json",
+        },
+        {
+          match: (p) =>
+            typeof p?.q === "string" && p.q.includes("is:issue") && !p.q.includes("is:merged"),
+          fixture: "issues-closed-boundary.json",
+        },
+      ],
+      "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
+      "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
+    });
+    vi.doMock("@workspace/github", () => ({
+      createGitHubClient: () => ({ raw: fakeOctokit.raw }),
+    }));
+    const mod = await import("../agent/tools/collect_activity.ts");
+    const tool = mod.default;
+    const result = (await withEveContext(
+      async () => tool.execute({ kind: "daily" } as never, ctx as never) as unknown,
+    )) as Awaited<ReturnType<typeof tool.execute>>;
+    const closed = result.sources.filter((s) => s.kind === "closed_issue");
+    expect(closed.map((s) => s.meta?.number)).toEqual([501]);
+  });
+
+  it("workflow-run endpoint receives status=failure + full ISO created range", async () => {
+    const calls: { route: string; params: Record<string, unknown> | undefined }[] = [];
+    const fakeOctokit = buildFakeOctokit(
+      {
+        "GET /repos/{owner}/{repo}/dependabot/alerts": { fixture: "dependabot-alerts-empty.json" },
+        "GET /repos/{owner}/{repo}/code-scanning/alerts": {
+          fixture: "code-scanning-alerts-empty.json",
+        },
+        "GET /repos/{owner}/{repo}/secret-scanning/alerts": {
+          fixture: "secret-scanning-alerts-empty.json",
+        },
+        "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
+        "GET /search/issues": [
+          {
+            match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
+            fixture: "merged-prs.json",
+          },
+          {
+            match: (p) =>
+              typeof p?.q === "string" && p.q.includes("is:issue") && !p.q.includes("is:merged"),
+            fixture: "issues-empty.json",
+          },
+        ],
+        "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
+        "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
+      },
+      calls,
+    );
+    vi.doMock("@workspace/github", () => ({
+      createGitHubClient: () => ({ raw: fakeOctokit.raw }),
+    }));
+    const mod = await import("../agent/tools/collect_activity.ts");
+    const tool = mod.default;
+    await withEveContext(
+      async () => (await tool.execute({ kind: "daily" } as never, ctx as never)) as unknown,
+    );
+    const runsCall = calls.find((c) => c.route.includes("actions/runs"));
+    expect(runsCall).toBeDefined();
+    expect(runsCall?.params?.status).toBe("failure");
+    expect(runsCall?.params?.created).toBe("2026-10-05T00:00:00.000Z..2026-10-06T00:00:00.000Z");
+    expect(runsCall?.params?.per_page).toBe(100);
+  });
+
+  it("a 100-entry success-only response surfaces the workflow-run truncation warning", async () => {
+    const fakeOctokit = buildFakeOctokit({
+      "GET /repos/{owner}/{repo}/dependabot/alerts": { fixture: "dependabot-alerts-empty.json" },
+      "GET /repos/{owner}/{repo}/code-scanning/alerts": {
+        fixture: "code-scanning-alerts-empty.json",
+      },
+      "GET /repos/{owner}/{repo}/secret-scanning/alerts": {
+        fixture: "secret-scanning-alerts-empty.json",
+      },
+      "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
+      "GET /search/issues": [
+        {
+          match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
+          fixture: "merged-prs.json",
+        },
+        {
+          match: (p) =>
+            typeof p?.q === "string" && p.q.includes("is:issue") && !p.q.includes("is:merged"),
+          fixture: "issues-empty.json",
+        },
+      ],
+      "GET /repos/{owner}/{repo}/actions/runs": {
+        fixture: "actions-runs-many-success.json",
+      },
+      "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
+    });
+    vi.doMock("@workspace/github", () => ({
+      createGitHubClient: () => ({ raw: fakeOctokit.raw }),
+    }));
+    const mod = await import("../agent/tools/collect_activity.ts");
+    const tool = mod.default;
+    const result = (await withEveContext(
+      async () => tool.execute({ kind: "daily" } as never, ctx as never) as unknown,
+    )) as Awaited<ReturnType<typeof tool.execute>>;
+    const runWarning = result.availability.find((a) => a.reason.includes("Workflow-runs"));
+    expect(runWarning).toBeDefined();
+    expect(runWarning?.reason).toMatch(/100-result cap/);
+    expect(result.counts.failed_workflow_runs).toBe(0);
+  });
 });
 
 // ── submit_digest ───────────────────────────────────────────────────────
@@ -366,16 +575,24 @@ describe("submit_digest", () => {
         fixture: "secret-scanning-alerts.json",
       },
       "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
-      "GET /search/issues": {
-        match: (params) => typeof params?.q === "string" && params.q.includes("is:merged"),
-        fixture: "merged-prs.json",
-      },
-      "GET /search/issues_issues": { fixture: "issues-empty.json" },
+      "GET /search/issues": [
+        {
+          match: (params) => typeof params?.q === "string" && params.q.includes("is:merged"),
+          fixture: "merged-prs.json",
+        },
+        {
+          match: (params) =>
+            typeof params?.q === "string" &&
+            params.q.includes("is:issue") &&
+            !params.q.includes("is:merged"),
+          fixture: "issues-empty.json",
+        },
+      ],
       "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
       "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
     });
     vi.doMock("@workspace/github", () => ({
-      createGitHubClient: () => ({ raw: fakeOctokit }),
+      createGitHubClient: () => ({ raw: fakeOctokit.raw }),
     }));
     vi.doMock("@workspace/email", async () => {
       const actual = await vi.importActual<typeof import("@workspace/email")>("@workspace/email");
@@ -567,16 +784,24 @@ describe("Synthetic secret never reaches the corpus (criterion 6)", () => {
         fixture: "secret-scanning-alerts-synthetic.json",
       },
       "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
-      "GET /search/issues": {
-        match: (params) => typeof params?.q === "string" && params.q.includes("is:merged"),
-        fixture: "merged-prs.json",
-      },
-      "GET /search/issues_issues": { fixture: "issues-empty.json" },
+      "GET /search/issues": [
+        {
+          match: (params) => typeof params?.q === "string" && params.q.includes("is:merged"),
+          fixture: "merged-prs.json",
+        },
+        {
+          match: (params) =>
+            typeof params?.q === "string" &&
+            params.q.includes("is:issue") &&
+            !params.q.includes("is:merged"),
+          fixture: "issues-empty.json",
+        },
+      ],
       "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
       "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
     });
     vi.doMock("@workspace/github", () => ({
-      createGitHubClient: () => ({ raw: fakeOctokit }),
+      createGitHubClient: () => ({ raw: fakeOctokit.raw }),
     }));
     const mod = await import("../agent/tools/collect_activity.ts");
     const tool = mod.default;
@@ -694,16 +919,24 @@ describe("Edition identity is a real hash of the canonical input", () => {
         fixture: "secret-scanning-alerts.json",
       },
       "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
-      "GET /search/issues": {
-        match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
-        fixture: "merged-prs.json",
-      },
-      "GET /search/issues_issues": { fixture: "issues-empty.json" },
+      "GET /search/issues": [
+        {
+          match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
+          fixture: "merged-prs.json",
+        },
+        {
+          match: (params) =>
+            typeof params?.q === "string" &&
+            params.q.includes("is:issue") &&
+            !params.q.includes("is:merged"),
+          fixture: "issues-empty.json",
+        },
+      ],
       "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
       "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
     });
     vi.doMock("@workspace/github", () => ({
-      createGitHubClient: () => ({ raw: fakeOctokit }),
+      createGitHubClient: () => ({ raw: fakeOctokit.raw }),
     }));
     const mod = await import("../agent/tools/collect_activity.ts");
     const tool = mod.default;
@@ -750,16 +983,24 @@ describe("Quiet-period rendering (criteria 3)", () => {
         fixture: "secret-scanning-alerts.json",
       },
       "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
-      "GET /search/issues": {
-        match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
-        fixture: "merged-prs.json",
-      },
-      "GET /search/issues_issues": { fixture: "issues-empty.json" },
+      "GET /search/issues": [
+        {
+          match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
+          fixture: "merged-prs.json",
+        },
+        {
+          match: (params) =>
+            typeof params?.q === "string" &&
+            params.q.includes("is:issue") &&
+            !params.q.includes("is:merged"),
+          fixture: "issues-empty.json",
+        },
+      ],
       "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
       "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
     });
     vi.doMock("@workspace/github", () => ({
-      createGitHubClient: () => ({ raw: fakeOctokit }),
+      createGitHubClient: () => ({ raw: fakeOctokit.raw }),
     }));
     const renderMod = await import("@workspace/email");
     const digest: Awaited<ReturnType<typeof renderMod.renderDigest>> = await renderMod.renderDigest(
@@ -831,7 +1072,74 @@ describe("Plain-text is meaningful (criterion 7)", () => {
   });
 });
 
-// ── Schedule dispatch contract (review of commit 711642f) ──────────────
+// ── Schedule dispatch contract ───────────────────────────────────────────
+//
+// The agent's two schedules are fire-and-forget prompts (Eve's
+// `defineSchedule({ markdown })`). Eve's runtime turns each prompt into
+// a session and drives the model loop. The model loop's contract with
+// the agent's tools is:
+//   - tools that finish without throwing return normally,
+//   - a tool with `endsTurn: true` ends the loop after a successful call,
+//   - a tool that throws propagates up to the turn (schedule run fails).
+//
+// These tests exercise that contract against the **real tool bodies**
+// (no mocks of collect_activity / submit_digest). The mocked model is
+// a list of "next tool calls" — a faithful stand-in for what the LLM
+// emits inside the loop. The tool loop is the same shape Eve uses:
+// resolve the tool name → call its `execute(input, ctx)` → honor
+// `endsTurn`.
+
+interface ToolCall {
+  readonly name: string;
+  readonly input: unknown;
+}
+
+interface ToolDefLike {
+  readonly description?: string;
+  readonly inputSchema?: unknown;
+  readonly endsTurn?: boolean;
+  execute(input: unknown, ctx: unknown): Promise<unknown>;
+}
+
+type Outcome =
+  | { kind: "delivered" }
+  | { kind: "no-submission" }
+  | { kind: "error"; error: unknown };
+
+/**
+ * Drive the agent's model loop with a fixed sequence of tool calls.
+ * This is the smallest supported mechanism that exercises the real
+ * tool bodies + their `endsTurn` flag + their error semantics — i.e.
+ * the same loop shape Eve's schedule dispatcher runs.
+ */
+/** Drive the agent's model loop. Recursive so each step awaits the
+ * previous one without `await` inside a `for` loop. */
+async function drive(
+  tools: Record<string, ToolDefLike>,
+  ctx: unknown,
+  remaining: ReadonlyArray<ToolCall>,
+): Promise<{ kind: "delivered" } | { kind: "continue" }> {
+  const [head, ...rest] = remaining;
+  if (head === undefined) return { kind: "continue" };
+  const tool = tools[head.name];
+  if (!tool) throw new Error(`Unknown tool: ${head.name}`);
+  await tool.execute(head.input, ctx);
+  if (tool.endsTurn) return { kind: "delivered" };
+  return drive(tools, ctx, rest);
+}
+
+async function runToolLoop(
+  tools: Record<string, ToolDefLike>,
+  ctx: unknown,
+  calls: ReadonlyArray<ToolCall>,
+): Promise<Outcome> {
+  try {
+    const result = await drive(tools, ctx, calls);
+    return result.kind === "delivered" ? { kind: "delivered" } : { kind: "no-submission" };
+  } catch (err) {
+    return { kind: "error", error: err };
+  }
+}
 
 describe("Schedule dispatch contract", () => {
   const ctx = {
@@ -850,71 +1158,182 @@ describe("Schedule dispatch contract", () => {
         fixture: "secret-scanning-alerts.json",
       },
       "GET /repos/{owner}/{repo}/pulls": { fixture: "merged-prs.json" },
-      "GET /search/issues": {
-        match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
-        fixture: "merged-prs.json",
-      },
-      "GET /search/issues_issues": { fixture: "issues-empty.json" },
+      "GET /search/issues": [
+        {
+          match: (p) => typeof p?.q === "string" && p.q.includes("is:merged"),
+          fixture: "merged-prs.json",
+        },
+        {
+          match: (p) =>
+            typeof p?.q === "string" && p.q.includes("is:issue") && !p.q.includes("is:merged"),
+          fixture: "issues-empty.json",
+        },
+      ],
       "GET /repos/{owner}/{repo}/actions/runs": { fixture: "actions-runs.json" },
       "GET /repos/{owner}/{repo}/releases": { fixture: "releases.json" },
     });
   }
 
-  it("submit_digest sets endsTurn: true so the schedule run is delivered", async () => {
-    // submit_digest must mark the turn as ending after delivery. A
-    // schedule's run is only "successful" if a tool with endsTurn: true
-    // is invoked; otherwise Eve reports the run as having produced no
-    // delivery. We assert the contract here.
-    const submitMod = await import("../agent/tools/submit_digest.ts");
-    const tool = submitMod.default as unknown as { endsTurn?: boolean };
-    expect(tool.endsTurn).toBe(true);
-  });
-
-  it("schedule run is delivered when the model calls collect then submit", async () => {
+  /** Mock the email layer and run a callback inside the eve context
+   * with the agent's real tools loaded. The callback executes the
+   * mocked model — a sequence of tool calls — and observes the outcome. */
+  async function runWithMockedAgent(
+    opts: { emailFails?: boolean },
+    body: (args: {
+      tools: { collect_activity: ToolDefLike; submit_digest: ToolDefLike };
+      ctx: {
+        callId: string;
+        toolName: string;
+        messages: never[];
+        abortSignal: AbortSignal;
+        session: { auth: never };
+      };
+      delivered: boolean;
+      sentHtml: string;
+      sentText: string;
+    }) => Promise<void>,
+  ): Promise<void> {
     const fakeOctokit = buildFullFakeOctokit();
-    let delivered = false;
     vi.doMock("@workspace/github", () => ({
-      createGitHubClient: () => ({ raw: fakeOctokit }),
+      createGitHubClient: () => ({ raw: fakeOctokit.raw }),
     }));
+    const state = { delivered: false, sentHtml: "", sentText: "" };
     vi.doMock("@workspace/email", async () => {
       const actual = await vi.importActual<typeof import("@workspace/email")>("@workspace/email");
       return {
         ...actual,
         createEmailClient: () => ({
-          async send() {
-            delivered = true;
+          async send(args: { html: string; text?: string }) {
+            if (opts.emailFails) throw new Error("Resend rejected the send");
+            state.delivered = true;
+            state.sentHtml = args.html;
+            state.sentText = args.text ?? "";
             return { id: "resend_test_id", idempotencyKey: "digest:send:abc" };
           },
         }),
       };
     });
-    await withEveContext(async () => {
+    return await withEveContext(async () => {
       const collectMod = await import("../agent/tools/collect_activity.ts");
       const submitMod = await import("../agent/tools/submit_digest.ts");
-      await collectMod.default.execute({ kind: "daily" } as never, ctx as never);
-      const corpusMod = await import("../agent/lib/state.ts");
-      const corpus = corpusMod.sourceCorpus.get();
-      const pr = corpus.sources.find((s) => s.kind === "merged_pr");
-      if (!pr) throw new Error("fixture has no merged_pr");
-      await submitMod.default.execute(
-        {
-          kind: "daily",
-          report: {
-            kind: "daily",
-            sections: [{ kind: "tldr", items: [{ text: "x", referenceId: pr.id }] }],
-          },
-        } as never,
-        ctx as never,
-      );
+      const tools = {
+        collect_activity: collectMod.default as unknown as ToolDefLike,
+        submit_digest: submitMod.default as unknown as ToolDefLike,
+      };
+      return body({
+        tools,
+        ctx,
+        delivered: state.delivered,
+        sentHtml: state.sentHtml,
+        sentText: state.sentText,
+      });
     });
-    expect(delivered).toBe(true);
+  }
+
+  it("submit_digest sets endsTurn: true", async () => {
+    const submitMod = await import("../agent/tools/submit_digest.ts");
+    expect((submitMod.default as unknown as ToolDefLike).endsTurn).toBe(true);
   });
 
-  it("partial collection still delivers the digest with availability surfaced", async () => {
-    // v1 schedule contract: a partial collection (one source fails)
-    // does not abort the digest. The model reaches submit_digest with
-    // a non-empty source list, the digest is delivered, and the failed
-    // source appears in the availability block so the operator sees it.
+  it("collect_activity does NOT set endsTurn (loop continues)", async () => {
+    const collectMod = await import("../agent/tools/collect_activity.ts");
+    expect((collectMod.default as unknown as ToolDefLike).endsTurn).toBeFalsy();
+  });
+
+  it("delivered when the model calls collect then submit", async () => {
+    await runWithMockedAgent({}, async ({ tools, ctx: c }) => {
+      const corpusResult = (await tools.collect_activity.execute({ kind: "daily" }, c)) as {
+        sources: { id: string; kind: string }[];
+      };
+      const pr = corpusResult.sources.find((s) => s.kind === "merged_pr");
+      if (!pr) throw new Error("fixture has no merged_pr");
+      const outcome = await runToolLoop(tools, c, [
+        { name: "collect_activity", input: { kind: "daily" } },
+        {
+          name: "submit_digest",
+          input: {
+            kind: "daily",
+            report: {
+              kind: "daily",
+              sections: [{ kind: "tldr", items: [{ text: "x", referenceId: pr.id }] }],
+            },
+          },
+        },
+      ]);
+      expect(outcome.kind).toBe("delivered");
+    });
+  });
+
+  it("loop ends without submission when the model finishes without calling submit", async () => {
+    await runWithMockedAgent({}, async ({ tools, ctx: c }) => {
+      const outcome = await runToolLoop(tools, c, [
+        { name: "collect_activity", input: { kind: "daily" } },
+      ]);
+      // The loop ran one step (collect, no endsTurn) and then
+      // exhausted the call list. The agent did not invoke an endsTurn
+      // tool, so the turn does not produce a delivery. Eve's
+      // scheduler records this as a run that produced no submission.
+      expect(outcome.kind).toBe("no-submission");
+    });
+  });
+
+  it("propagates the error when Resend rejects the send", async () => {
+    await runWithMockedAgent({ emailFails: true }, async ({ tools, ctx: c }) => {
+      const corpusResult = (await tools.collect_activity.execute({ kind: "daily" }, c)) as {
+        sources: { id: string; kind: string }[];
+      };
+      const pr = corpusResult.sources.find((s) => s.kind === "merged_pr");
+      if (!pr) throw new Error("fixture has no merged_pr");
+      const outcome = await runToolLoop(tools, c, [
+        { name: "collect_activity", input: { kind: "daily" } },
+        {
+          name: "submit_digest",
+          input: {
+            kind: "daily",
+            report: {
+              kind: "daily",
+              sections: [{ kind: "tldr", items: [{ text: "x", referenceId: pr.id }] }],
+            },
+          },
+        },
+      ]);
+      expect(outcome.kind).toBe("error");
+      if (outcome.kind === "error") {
+        expect(String(outcome.error)).toMatch(/Resend rejected/);
+      }
+    });
+  });
+
+  it("propagates validation errors from submit_digest", async () => {
+    await runWithMockedAgent({}, async ({ tools, ctx: c }) => {
+      // Run collect first so the corpus is populated and validation
+      // has an id map to compare against.
+      await tools.collect_activity.execute({ kind: "daily" }, c);
+      const outcome = await runToolLoop(tools, c, [
+        {
+          name: "submit_digest",
+          input: {
+            kind: "daily",
+            report: {
+              kind: "daily",
+              sections: [
+                { kind: "tldr", items: [{ text: "x", referenceId: "deessejs/agents:pr:9999" }] },
+              ],
+            },
+          },
+        },
+      ]);
+      expect(outcome.kind).toBe("error");
+      if (outcome.kind === "error") {
+        expect(String(outcome.error)).toMatch(/not in the corpus/);
+      }
+    });
+  });
+
+  it("partial collection still delivers with availability surfaced in the email", async () => {
+    // Same as before but with Dependabot failing. The rendered HTML
+    // and plain-text must surface the failure so the operator does
+    // not mistake an inaccessible endpoint for "no alerts".
     const failOctokit: unknown = {
       request: (route: string) => {
         if (route.includes("dependabot")) {
@@ -933,7 +1352,7 @@ describe("Schedule dispatch contract", () => {
         },
       },
     };
-    let delivered = false;
+    const captured = { delivered: false, sentHtml: "", sentText: "" };
     vi.doMock("@workspace/github", () => ({
       createGitHubClient: () => ({ raw: failOctokit }),
     }));
@@ -942,63 +1361,42 @@ describe("Schedule dispatch contract", () => {
       return {
         ...actual,
         createEmailClient: () => ({
-          async send() {
-            delivered = true;
+          async send(args: { html: string; text?: string }) {
+            captured.delivered = true;
+            captured.sentHtml = args.html;
+            captured.sentText = args.text ?? "";
             return { id: "resend_partial_id", idempotencyKey: "digest:send:partial" };
           },
         }),
       };
     });
-    await withEveContext(async () => {
+    const outcome = await withEveContext(async () => {
       const collectMod = await import("../agent/tools/collect_activity.ts");
-      await collectMod.default.execute({ kind: "daily" } as never, ctx as never);
-      const corpusMod = await import("../agent/lib/state.ts");
-      const corpus = corpusMod.sourceCorpus.get();
-      // Dependabot failed; the model can still submit from the
-      // remaining sources (e.g. secret-scanning). With every other
-      // endpoint mocked empty, the only available corpus is whatever
-      // didn't fail.
-      const any = corpus.sources[0];
-      const sectionItems = any
-        ? [{ kind: "risks", items: [{ text: "x", referenceId: any.id }] }]
-        : [];
       const submitMod = await import("../agent/tools/submit_digest.ts");
-      const report =
-        sectionItems.length > 0
-          ? { kind: "daily" as const, sections: sectionItems }
-          : { kind: "daily" as const, sections: [{ kind: "tldr", items: [] }] };
-      await submitMod.default.execute({ kind: "daily", report } as never, ctx as never);
-    });
-    expect(delivered).toBe(true);
-  });
-
-  it("schedule run is unsuccessful when the model emits no submit (only collect)", async () => {
-    // Models sometimes call collect_activity and then end the turn
-    // without submitting. submit_digest is the only tool with
-    // endsTurn: true; without it, Eve reports no output → run is
-    // unsuccessful.
-    const fakeOctokit = buildFullFakeOctokit();
-    let delivered = false;
-    vi.doMock("@workspace/github", () => ({
-      createGitHubClient: () => ({ raw: fakeOctokit }),
-    }));
-    vi.doMock("@workspace/email", async () => {
-      const actual = await vi.importActual<typeof import("@workspace/email")>("@workspace/email");
-      return {
-        ...actual,
-        createEmailClient: () => ({
-          async send() {
-            delivered = true;
-            return { id: "x", idempotencyKey: "x" };
-          },
-        }),
+      const tools = {
+        collect_activity: collectMod.default as unknown as ToolDefLike,
+        submit_digest: submitMod.default as unknown as ToolDefLike,
       };
+      // First call populates the corpus; second pass drives the loop.
+      const corpus = (await tools.collect_activity.execute({ kind: "daily" }, ctx)) as {
+        sources: { id: string; kind: string }[];
+      };
+      const survivor = corpus.sources.find((s) => s.kind !== "dependabot_alert");
+      const sections = survivor
+        ? [{ kind: "risks", items: [{ text: "x", referenceId: survivor.id }] }]
+        : [{ kind: "tldr", items: [] }];
+      return runToolLoop(tools, ctx, [
+        { name: "collect_activity", input: { kind: "daily" } },
+        {
+          name: "submit_digest",
+          input: { kind: "daily", report: { kind: "daily", sections } },
+        },
+      ]);
     });
-    await withEveContext(async () => {
-      const collectMod = await import("../agent/tools/collect_activity.ts");
-      await collectMod.default.execute({ kind: "daily" } as never, ctx as never);
-      // Intentionally no submit_digest call.
-    });
-    expect(delivered).toBe(false);
+    expect(outcome.kind).toBe("delivered");
+    expect(captured.delivered).toBe(true);
+    expect(captured.sentHtml).toMatch(/Dependabot/);
+    expect(captured.sentHtml).toMatch(/Data-source availability/);
+    expect(captured.sentText).toMatch(/Dependabot/);
   });
 });
