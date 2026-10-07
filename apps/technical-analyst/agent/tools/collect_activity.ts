@@ -347,28 +347,20 @@ async function listAll(
   route: string,
   params: Record<string, unknown>,
   max: number,
-  /** Some endpoints (e.g. /actions/runs) wrap the array under a named
-   * key in the response body. Provide it so we can extract the rows
-   * the real paginate plugin would yield. */
-  arrayKey?: string,
 ): Promise<{ rows: unknown[]; truncated: boolean }> {
   // The paginate plugin attaches a `paginate` field at runtime that
   // the base Octokit type does not model. We cast through unknown to
   // call `paginate.iterator(...)` without losing the underlying
   // type-safety of the raw client.
   type WithPaginate = {
-    paginate: { iterator: (...args: unknown[]) => AsyncIterable<{ data: unknown }> };
+    paginate: { iterator: (...args: unknown[]) => AsyncIterable<{ data: unknown[] }> };
   };
   const paginated = octokit as unknown as WithPaginate;
   const iter = paginated.paginate.iterator(route, params);
   const out: unknown[] = [];
   for await (const page of iter) {
-    const data = page.data;
-    const items = (arrayKey === undefined ? data : asObject(data)?.[arrayKey]) as
-      | unknown[]
-      | undefined;
-    if (!Array.isArray(items)) continue;
-    for (const item of items) {
+    if (!Array.isArray(page.data)) continue;
+    for (const item of page.data) {
       out.push(item);
       if (out.length >= max) {
         // We can't know if there's another page after we hit the cap.
@@ -703,7 +695,6 @@ async function fetchFailedRuns(octokit: OctokitRaw, period: Period): Promise<Cap
       created: `${period.start}..${period.end}`,
     },
     100,
-    "workflow_runs",
   );
   const out: Source[] = [];
   for (const raw of rows) {
