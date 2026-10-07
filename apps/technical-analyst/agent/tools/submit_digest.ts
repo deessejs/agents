@@ -128,6 +128,7 @@ const DAILY_REF_KINDS: Record<string, ReadonlyArray<Source["kind"]>> = {
     "failed_workflow_run",
     "open_pr",
     "opened_issue",
+    "release",
   ],
   watchlist: ["open_pr", "merged_pr", "opened_issue", "release", "failed_workflow_run"],
 };
