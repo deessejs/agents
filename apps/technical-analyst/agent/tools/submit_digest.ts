@@ -99,34 +99,54 @@ const SubmitInputSchema = z.discriminatedUnion("kind", [
 ]);
 
 // ── Reference-kind allowlist per section ───────────────────────────────
+//
+// Each allowlist is editorial, not gating: the renderer surfaces
+// whatever section the model puts each kind in. The allowlists below
+// reflect what a reasonable editor would put in each section
+// (e.g. a release is fine on the watchlist as an upcoming note;
+// a failed workflow run is a legitimate top-of-email signal). A
+// section refusing a kind that's editorially reasonable just makes
+// the model retry until it picks a less informative pair — which is
+// exactly the launch-blocking failure mode we saw in production.
 
 const DAILY_REF_KINDS: Record<string, ReadonlyArray<Source["kind"]>> = {
-  tldr: ["merged_pr", "release", "opened_issue", "closed_issue"],
-  shipped: ["merged_pr", "release"],
+  tldr: [
+    "merged_pr",
+    "release",
+    "opened_issue",
+    "closed_issue",
+    "failed_workflow_run",
+    "dependabot_alert",
+    "code_scanning_alert",
+    "secret_scanning_alert",
+  ],
+  shipped: ["merged_pr", "release", "closed_issue"],
   risks: [
     "dependabot_alert",
     "code_scanning_alert",
     "secret_scanning_alert",
     "failed_workflow_run",
     "open_pr",
+    "opened_issue",
   ],
-  watchlist: ["open_pr", "merged_pr", "opened_issue"],
+  watchlist: ["open_pr", "merged_pr", "opened_issue", "release", "failed_workflow_run"],
 };
 
 const WEEKLY_REF_KINDS: Record<string, ReadonlyArray<Source["kind"]>> = {
-  tldr: ["merged_pr", "release", "opened_issue", "closed_issue"],
-  shipped: ["merged_pr", "release"],
-  inprogress: ["open_pr"],
+  tldr: ["merged_pr", "release", "opened_issue", "closed_issue", "failed_workflow_run"],
+  shipped: ["merged_pr", "release", "closed_issue"],
+  inprogress: ["open_pr", "merged_pr"],
   risks: [
     "dependabot_alert",
     "code_scanning_alert",
     "secret_scanning_alert",
     "failed_workflow_run",
     "open_pr",
+    "opened_issue",
   ],
-  metrics: ["merged_pr", "dependabot_alert", "code_scanning_alert"],
-  trends: ["merged_pr", "release"],
-  next: ["open_pr", "dependabot_alert"],
+  metrics: ["merged_pr", "dependabot_alert", "code_scanning_alert", "release"],
+  trends: ["merged_pr", "release", "failed_workflow_run"],
+  next: ["open_pr", "dependabot_alert", "code_scanning_alert", "release", "failed_workflow_run"],
 };
 
 // ── Reference resolution ──────────────────────────────────────────────
