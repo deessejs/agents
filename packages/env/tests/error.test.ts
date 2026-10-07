@@ -13,7 +13,16 @@ function withEnv<T>(env: Record<string, string | undefined>, fn: () => T): T {
   for (const key of Object.keys(env)) {
     original[key] = process.env[key];
   }
-  Object.assign(process.env, env);
+  // `Object.assign` cannot delete keys; for `undefined` values we
+  // must call `delete` so the schema sees the field as absent rather
+  // than as the literal string "undefined".
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
   try {
     return fn();
   } finally {
@@ -71,25 +80,39 @@ describe("error formatting (via createEnv failure path)", () => {
   });
 
   it("lists every missing field and its hint", () => {
-    withEnv({}, () => {
-      const schema = z.object({
-        GITHUB_TOKEN: z.string().min(1, "GITHUB_TOKEN is required"),
-        RESEND_API_KEY: z.string(),
-        RESEND_FROM_ADDRESS: z.email(),
-      });
-      let caught: unknown;
-      try {
-        createEnv(schema);
-      } catch (err) {
-        caught = err;
-      }
-      expect(caught).toBeInstanceOf(EnvValidationError);
-      const message = (caught as EnvValidationError).message;
-      expect(message).toContain("GITHUB_TOKEN");
-      expect(message).toContain("RESEND_API_KEY");
-      expect(message).toContain("RESEND_FROM_ADDRESS");
-      expect(message).toContain("fine-grained PAT");
-    });
+    // Explicitly clear the keys the schema checks. CI jobs that hoist
+    // synthetic env at job level, or a developer's local shell, can
+    // leak GITHUB_TOKEN / RESEND_API_KEY into this test and mask the
+    // missing-field path it is asserting.
+    withEnv(
+      {
+        GITHUB_TOKEN: undefined,
+        RESEND_API_KEY: undefined,
+        RESEND_FROM_ADDRESS: undefined,
+        DIGEST_RECIPIENT: undefined,
+        MINIMAX_API_KEY: undefined,
+        LLM_MODEL_ID: undefined,
+      },
+      () => {
+        const schema = z.object({
+          GITHUB_TOKEN: z.string().min(1, "GITHUB_TOKEN is required"),
+          RESEND_API_KEY: z.string(),
+          RESEND_FROM_ADDRESS: z.email(),
+        });
+        let caught: unknown;
+        try {
+          createEnv(schema);
+        } catch (err) {
+          caught = err;
+        }
+        expect(caught).toBeInstanceOf(EnvValidationError);
+        const message = (caught as EnvValidationError).message;
+        expect(message).toContain("GITHUB_TOKEN");
+        expect(message).toContain("RESEND_API_KEY");
+        expect(message).toContain("RESEND_FROM_ADDRESS");
+        expect(message).toContain("fine-grained PAT");
+      },
+    );
   });
 
   it("never leaks a 2-character prefix from a secret value", () => {

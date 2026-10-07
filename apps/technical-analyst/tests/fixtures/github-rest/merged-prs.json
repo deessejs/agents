@@ -1,0 +1,22 @@
+[
+  {
+    "number": 142,
+    "title": "feat: OAuth PKCE support",
+    "state": "closed",
+    "merged_at": "2026-10-05T11:30:00Z",
+    "html_url": "https://github.com/deessejs/agents/pull/142",
+    "user": { "login": "martin", "id": 1, "html_url": "https://github.com/martin", "type": "User" },
+    "created_at": "2026-10-04T08:00:00Z",
+    "updated_at": "2026-10-05T11:30:00Z"
+  },
+  {
+    "number": 143,
+    "title": "fix: race in digest refresh",
+    "state": "closed",
+    "merged_at": "2026-10-05T09:10:00Z",
+    "html_url": "https://github.com/deessejs/agents/pull/143",
+    "user": { "login": "alice", "id": 2, "html_url": "https://github.com/alice", "type": "User" },
+    "created_at": "2026-10-04T13:00:00Z",
+    "updated_at": "2026-10-05T09:10:00Z"
+  }
+]

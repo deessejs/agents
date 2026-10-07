@@ -1,0 +1,18 @@
+[
+  {
+    "number": 401,
+    "title": "Inside the window",
+    "state": "open",
+    "created_at": "2026-10-05T08:00:00Z",
+    "html_url": "https://github.com/deessejs/agents/issues/401",
+    "user": { "login": "alice", "id": 2, "html_url": "https://github.com/alice", "type": "User" }
+  },
+  {
+    "number": 402,
+    "title": "Exactly at period.end",
+    "state": "open",
+    "created_at": "2026-10-06T00:00:00.000Z",
+    "html_url": "https://github.com/deessejs/agents/issues/402",
+    "user": { "login": "bob", "id": 3, "html_url": "https://github.com/bob", "type": "User" }
+  }
+]

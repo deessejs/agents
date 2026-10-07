@@ -10,6 +10,19 @@
         "tsconfig.json",
         "package.json",
         "tsconfig.tsbuildinfo"
+      ],
+      "env": [
+        "GITHUB_TOKEN",
+        "GITHUB_ORG",
+        "GITHUB_REPO",
+        "RESEND_API_KEY",
+        "RESEND_FROM_ADDRESS",
+        "RESEND_FROM_NAME",
+        "RESEND_REPLY_TO",
+        "DIGEST_RECIPIENT",
+        "MINIMAX_API_KEY",
+        "LLM_MODEL_ID",
+        "AGENTS_PAUSED"
       ]
     },
     "lint": {

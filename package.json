@@ -14,13 +14,9 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "dev": "turbo run dev",
-    "clean": "turbo run clean && rm -rf node_modules .turbo",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "turbo run build && changeset publish"
+    "clean": "turbo run clean && rm -rf node_modules .turbo"
   },
   "devDependencies": {
-    "@changesets/cli": "catalog:",
     "@workspace/oxlint-config": "workspace:*",
     "@workspace/tsconfig": "workspace:*",
     "oxfmt": "catalog:",

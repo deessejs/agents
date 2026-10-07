@@ -4,7 +4,9 @@ packages:
   - "tools/*"
 
 allowBuilds:
+  "@mongodb-js/zstd": true
   esbuild: true
+  node-liblzma: true
   protobufjs: true
 
 # ----------------------------------------------------------------------------
@@ -16,16 +18,13 @@ allowBuilds:
 #   - `^` ranges for build / test tooling: turbo, typescript, oxlint, oxfmt,
 #     vitest, @types/node. Minor bumps are cheap and rarely break us.
 #   - Exact pins for runtime libraries where ABI breaks are routine: the
-#     ai-sdk family, @octokit/* (core only), pino, gpt-tokenizer, zod.
+#     ai-sdk family, @octokit/* (core only), pino, zod.
 #     Pinning forces a deliberate bump on every minor.
-#   - `^` is allowed for runtime deps where the upstream policy is
-#     SemVer-strict: @opentelemetry/*, @octokit/types, @vercel/kv.
 # ----------------------------------------------------------------------------
 catalog:
   # Build / test tooling (caret-prefix OK; minor bumps are safe)
   turbo: ^2.3.0
   typescript: ^5.6.0
-  "@changesets/cli": ^2.27.0
   vitest: ^2.1.0
   "@types/node": ^22.0.0
 
@@ -44,20 +43,9 @@ catalog:
   # provider package itself is the integration surface every other
   # @ai-sdk/* aligns against.
   ai: 7.0.127
-  "@ai-sdk/anthropic": 4.0.71
   "@ai-sdk/minimax": 3.0.48
+  "@ai-sdk/provider": 4.0.21
   "@ai-sdk/provider-utils": 5.0.53
-  gpt-tokenizer: ^2.5.0
-
-  # Observability (pinned — otel SDK majors ship breaking changes;
-  # @opentelemetry/* stays caret because their published majors are reliable)
-  pino: ^9.5.0
-  pino-pretty: ^11.3.0
-  "@opentelemetry/api": ^1.9.0
-  "@opentelemetry/sdk-node": ^0.222.0
-  "@opentelemetry/exporter-trace-otlp-http": ^0.222.0
-  "@opentelemetry/resources": ^2.0.0
-  "@opentelemetry/semantic-conventions": ^1.27.0
 
   # GitHub API (pinned — octokit majors ship breaking changes;
   # cross-plugin compatibility is verified only at exact ranges)
@@ -67,5 +55,31 @@ catalog:
   "@octokit/plugin-retry": 8.1.1
   "@octokit/types": ^18.0.0
 
-  # Vercel KV (used by env, observability, runtime for state/dedup)
-  "@vercel/kv": ^3.0.0
+  # Email (Phase 2 — @workspace/email).
+  # resend: caret (Resend majors are rare and the SDK is small + stable).
+  # react-email: caret (the v6 line unifies @react-email/components +
+  # @react-email/render into a single package; the older components
+  # package is being deprecated, so we use the new one).
+  # react/react-dom: caret (peer deps of react-email — v18.2.0+ or v19).
+  resend: ^6.32.0
+  react-email: ^6.11.0
+  react: ^19.3.0
+  react-dom: ^19.3.0
+  "@types/react": ^19.3.0
+  "@types/react-dom": ^19.3.0
+
+  # eve framework (apps/technical-analyst).
+  # Pre-1.0, released every few weeks. Caret OK; the runtime doc's
+  # snippets reference `eve/schedules`, `eve/tools`, and the
+  # `defineSchedule({ cron, markdown })` fire-and-forget form.
+  # Upgrade policy: every minor bump requires re-reading the runtime
+  # doc snippets against the new eve API (the framework is still 0.x).
+  eve: ^0.71.2
+
+  # Eve's default local sandbox provider (peer of eve). Required for
+  # `eve dev` / `eve build` / `eve start` on a developer workstation or
+  # in CI. Pinned exactly to match eve's expectation.
+  just-bash: 3.1.0
+
+minimumReleaseAgeExclude:
+  - eve@0.71.2

@@ -1,0 +1,40 @@
+{
+  "name": "agent-technical-analyst",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "lint": "echo '[agent-technical-analyst] no lint'",
+    "typecheck": "tsc --noEmit",
+    "build": "eve build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo .eve"
+  },
+  "dependencies": {
+    "@ai-sdk/minimax": "catalog:",
+    "@ai-sdk/provider": "catalog:",
+    "@workspace/email": "workspace:*",
+    "@workspace/env": "workspace:*",
+    "@workspace/github": "workspace:*",
+    "ai": "catalog:",
+    "eve": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-email": "catalog:",
+    "resend": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@workspace/tsconfig": "workspace:*",
+    "just-bash": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

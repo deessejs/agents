@@ -29,7 +29,7 @@ jobs:
   build:
     name: Lint, format, typecheck, test, build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -63,5 +63,31 @@ jobs:
       - name: Test
         run: pnpm run test
 
-      - name: Build
+      # Synthetic env is scoped to the steps that need it (eve info +
+      # eve build). Test steps above run with NO synthetic env, so
+      # packages/env/tests/error.test.ts sees the real CI environment
+      # and can exercise the "missing required field" path.
+      - name: Eve discovery
+        working-directory: apps/technical-analyst
+        env:
+          GITHUB_TOKEN: ghp_testTokenForCIabcdef0123
+          GITHUB_ORG: deessejs-test
+          GITHUB_REPO: agents-test
+          RESEND_API_KEY: re_testKeyForCI_1234567890
+          RESEND_FROM_ADDRESS: digest@mail.example.com
+          RESEND_FROM_NAME: Technical Analyst
+          DIGEST_RECIPIENT: ops@example.com
+          MINIMAX_API_KEY: minimax_test_key
+        run: ./node_modules/.bin/eve info
+
+      - name: Build (turbo)
+        env:
+          GITHUB_TOKEN: ghp_testTokenForCIabcdef0123
+          GITHUB_ORG: deessejs-test
+          GITHUB_REPO: agents-test
+          RESEND_API_KEY: re_testKeyForCI_1234567890
+          RESEND_FROM_ADDRESS: digest@mail.example.com
+          RESEND_FROM_NAME: Technical Analyst
+          DIGEST_RECIPIENT: ops@example.com
+          MINIMAX_API_KEY: minimax_test_key
         run: pnpm run build

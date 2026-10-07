@@ -1,0 +1,9 @@
+{
+  "github": {
+    "silent": true,
+    "autoAlias": true,
+    "branchFilter": {
+      "ONLY_DEPLOYMENTS_FROM_BRANCH": "main"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "number": 501,
+    "title": "Closed inside",
+    "state": "closed",
+    "closed_at": "2026-10-05T11:00:00Z",
+    "html_url": "https://github.com/deessejs/agents/issues/501",
+    "user": { "login": "alice", "id": 2, "html_url": "https://github.com/alice", "type": "User" }
+  },
+  {
+    "number": 502,
+    "title": "Closed exactly at period.end",
+    "state": "closed",
+    "closed_at": "2026-10-06T00:00:00.000Z",
+    "html_url": "https://github.com/deessejs/agents/issues/502",
+    "user": { "login": "bob", "id": 3, "html_url": "https://github.com/bob", "type": "User" }
+  }
+]

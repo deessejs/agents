@@ -1,0 +1,13 @@
+[
+  {
+    "number": 3,
+    "state": "open",
+    "dependency": { "package": { "name": "pkg-c", "ecosystem": "npm" } },
+    "security_vulnerability": {
+      "package": { "name": "pkg-c", "ecosystem": "npm" },
+      "severity": "medium",
+      "vulnerable_version_range": "<3.0.0"
+    },
+    "html_url": "https://example.com/3"
+  }
+]
